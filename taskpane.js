@@ -55,7 +55,10 @@ const fmtKm = n => {
 const scoreColor = s =>
   s>=80?"#10b981":s>=60?"#3b82f6":s>=40?"#f59e0b":s>=20?"#f97316":"#ef4444";
 
-const killChart = id => { if (S.charts[id]) { S.charts[id].destroy(); delete S.charts[id]; } };
+const killChart = id => { 
+  if (typeof Chart === 'undefined') return;
+  if (S.charts[id]) { S.charts[id].destroy(); delete S.charts[id]; } 
+};
 
 const safeEl = id => document.getElementById(id) || null;
 const setDisplay = (id, value) => { const el = safeEl(id); if (el) el.style.display = value; };
@@ -292,6 +295,10 @@ function renderAlertes(alertes) {
 // ─── CHARTS TABLEAU DE BORD ───────────────────────────────────────────────────
 
 function renderCharts(result) {
+  if (typeof Chart === 'undefined') {
+    console.warn("Chart.js not loaded yet. Skipping chart rendering.");
+    return;
+  }
   const ops = result.niveau_1_operationnel;
   const ind = result.niveau_2_indicateurs;
 
@@ -522,6 +529,10 @@ function renderVehicules(result) {
 // ─── BUDGETS ─────────────────────────────────────────────────────────────────
 
 function renderBudgets(result) {
+  if (typeof Chart === 'undefined') {
+    console.warn("Chart.js not loaded yet. Skipping budget chart rendering.");
+    return;
+  }
   const ops   = result.niveau_1_operationnel;
   const dec   = result.niveau_3_decisions;
   const optim = dec.optimisation||{};
@@ -582,9 +593,10 @@ function renderBudgets(result) {
   } else { if (scCard) scCard.style.display="none"; }
 
   // Donut budget
-  killChart("chartBudget");
-  if (tt>0) {
-    S.charts.chartBudget = new Chart(document.getElementById("chartBudget"), {
+  if (typeof Chart !== 'undefined') {
+    killChart("chartBudget");
+    if (tt>0) {
+      S.charts.chartBudget = new Chart(document.getElementById("chartBudget"), {
       type:"doughnut",
       data:{
         labels:["⛽ Carburant","🔧 Entretien","⚡ Groupe Élect."],
@@ -594,11 +606,12 @@ function renderBudgets(result) {
         plugins:{legend:{position:"right",labels:{color:"#8fa3c0",font:{size:10},boxWidth:12}}},
         scales:{}},
     });
+    }
   }
 
   // Bar coût/véhicule
   const couts = (result.niveau_2_indicateurs?.cout_par_vehicule||[]).slice(0,10);
-  if (couts.length) {
+  if (couts.length && typeof Chart !== 'undefined') {
     killChart("chartCoutVeh");
     S.charts.chartCoutVeh = new Chart(document.getElementById("chartCoutVeh"), {
       type:"bar",
@@ -636,6 +649,10 @@ function renderBudgets(result) {
 // ─── GROUPE ÉLECTROGÈNE ───────────────────────────────────────────────────────
 
 function renderGenerateur(result) {
+  if (typeof Chart === 'undefined') {
+    console.warn("Chart.js not loaded yet. Skipping generator chart rendering.");
+    return;
+  }
   const gen    = result.niveau_1_operationnel?.generateur||{};
   const gen_ind= result.niveau_2_indicateurs?.indicateurs_generateur||{};
   const gen_dec= result.niveau_3_decisions?.decisions_generateur||{};
