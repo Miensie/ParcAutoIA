@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>FleetInsight AI</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="taskpane.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════ HEADER ════════════════════════════ -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="6" fill="#f59e0b" opacity="0.15"/>
+        <path d="M4 18 L10 10 L14 14 L18 8 L24 18 Z" stroke="#f59e0b" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+        <circle cx="7" cy="19" r="2.5" fill="#f59e0b"/>
+        <circle cx="21" cy="19" r="2.5" fill="#f59e0b"/>
+        <rect x="4" y="17" width="20" height="3" rx="1.5" fill="#f59e0b" opacity="0.3"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-name">FleetInsight <span>IA</span></div>
+      <div class="logo-sub">Gestion intelligente du parc auto</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="ia-badge" id="geminiBadge" style="display:none">
+      <span class="gemini-dot"></span>IA Active
+    </div>
+    <div class="conn-status">
+      <span class="conn-dot" id="connDot"></span>
+      <span id="connLabel">Connexion…</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════ NAV ════════════════════════════════ -->
+<nav class="nav">
+  <button class="nav-btn active" data-tab="accueil">🏠 Accueil</button>
+  <button class="nav-btn" data-tab="tableau">📊 Tableau</button>
+  <button class="nav-btn" data-tab="vehicules">🚗 Véhicules</button>
+  <button class="nav-btn" data-tab="budgets">💰 Budgets</button>
+  <button class="nav-btn" data-tab="decisions">🎯 Décisions</button>
+  <button class="nav-btn" data-tab="ia">🤖 IA</button>
+  <button class="nav-btn" data-tab="rapport">📄 Rapport</button>
+</nav>
+
+<!-- ═══════════════════ MAIN ════════════════════════════════ -->
+<main class="main">
+
+  <!-- ─── ACCUEIL ───────────────────────────────────────── -->
+  <section class="tab active" id="tab-accueil">
+
+    <div class="welcome-banner">
+      <div class="wb-icon">🚗</div>
+      <div>
+      <div class="wb-title">FleetInsight IA</div>
+      <div class="wb-sub">Analyse intelligente de parc auto en 3 niveaux — Powered by IA.</div>
+      </div>
+    </div>
+
+    <div class="card" id="sheetCard" style="display:none">
+      <div class="card-title">📂 Feuilles détectées</div>
+      <div class="sheet-grid" id="sheetGrid"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚡ Démarrer</div>
+      <div class="card-desc">
+        Ouvrez votre classeur <code>.xlsm</code> dans Excel, cliquez sur
+        <strong>Charger</strong> puis <strong>Analyser</strong>.
+      </div>
+      <!-- Toggle Gemini -->
+      <div class="gemini-toggle-row">
+        <label class="toggle-label">
+          <input type="checkbox" id="useGemini" checked/>
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span>Activer IA</span>
+        </label>
+        <span class="toggle-hint">Recommandations + économies + résumé exécutif</span>
+      </div>
+      <div class="action-row">
+        <button class="btn btn-primary" id="btnLoad">📂 Charger le classeur</button>
+        <button class="btn btn-accent"  id="btnAnalyze" disabled>🔬 Analyser avec IA</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Feuilles reconnues automatiquement</div>
+      <div class="sheet-guide">
+        <div class="sg-row"><span class="sg-icon">🚗</span><div><div class="sg-name">LISTE DE VEH</div><div class="sg-desc">Inventaire des véhicules (marque, type, immatriculation)</div></div></div>
+        <div class="sg-row"><span class="sg-icon">⛽</span><div><div class="sg-name">SUIVI_CARBURANT</div><div class="sg-desc">Transactions carburant par véhicule et par date</div></div></div>
+        <div class="sg-row"><span class="sg-icon">🔧</span><div><div class="sg-name">ENTRETIEN ET REPARATIONS</div><div class="sg-desc">Interventions mécaniques (dissocié de la VT)</div></div></div>
+        <div class="sg-row"><span class="sg-icon">📍</span><div><div class="sg-name">SORTIES VEH</div><div class="sg-desc">Journal des missions et kilométrages</div></div></div>
+        <div class="sg-row"><span class="sg-icon">📋</span><div><div class="sg-name">VT</div><div class="sg-desc">Visites techniques — colonne Statuts (Oui/Non/Pas encore)</div></div></div>
+        <div class="sg-row"><span class="sg-icon">⚡</span><div><div class="sg-name">Gpe électrogène</div><div class="sg-desc">Dépenses groupe électrogène par agence et date</div></div></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ─── TABLEAU DE BORD ───────────────────────────────── -->
+  <section class="tab" id="tab-tableau">
+
+    <!-- Résumé exécutif IA (affiché si disponible) -->
+    <div class="gemini-exec-card" id="execCard" style="display:none">
+      <div class="gec-header">
+        <span class="gemini-logo">🤖</span>
+        <div>
+          <div class="gec-title">Résumé Exécutif — IA</div>
+          <div class="gec-sub">Analyse stratégique pour la Direction Générale</div>
+        </div>
+        <div class="gec-statut" id="execStatut"></div>
+      </div>
+      <div class="gec-message" id="execMessage"></div>
+      <div class="gec-narrative" id="execNarrative"></div>
+      <div class="gec-cols" id="execCols"></div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-empty">Lancez une analyse pour voir les indicateurs.</div>
+    </div>
+
+    <!-- Alertes groupées par domaine -->
+    <div class="card" id="alertesCard" style="display:none">
+      <div class="card-title">🚨 Alertes actives</div>
+      <div id="alertesList"></div>
+    </div>
+
+    <!-- Graphiques -->
+    <div class="charts-grid">
+      <div class="card chart-card">
+        <div class="card-title">⛽ Carburant — top consommateurs</div>
+        <div class="chart-wrap"><canvas id="chartCarb"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <div class="card-title">🔧 Types d'intervention</div>
+        <div class="chart-wrap"><canvas id="chartEntr"></canvas></div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="card chart-card">
+        <div class="card-title">📋 VT — Statuts (Oui / Non / Pas encore)</div>
+        <div class="chart-wrap"><canvas id="chartVT"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <div class="card-title">⚡ Groupe électrogène — dépenses par agence</div>
+        <div class="chart-wrap"><canvas id="chartGen"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="card-title">📊 Disponibilité du parc (atelier)</div>
+      <div class="chart-wrap"><canvas id="chartDispo"></canvas></div>
+    </div>
+
+  </section>
+
+  <!-- ─── VÉHICULES ─────────────────────────────────────── -->
+  <section class="tab" id="tab-vehicules">
+
+    <div class="filter-bar">
+      <button class="filter-btn active" data-filter="all">Tous</button>
+      <button class="filter-btn" data-filter="OPTIMAL">✅ Optimal</button>
+      <button class="filter-btn" data-filter="BON">🟢 Bon</button>
+      <button class="filter-btn" data-filter="SURVEILLER">🟡 Surveiller</button>
+      <button class="filter-btn" data-filter="CRITIQUE">🔴 Critique</button>
+      <button class="filter-btn" data-filter="REMPLACER">⛔ Remplacer</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏆 Classement santé des véhicules</div>
+      <div class="card-desc" style="font-size:10px">Score calculé dynamiquement sur les percentiles réels du parc (coût, pannes, immobilisation)</div>
+      <div class="veh-table-wrap">
+        <table class="veh-table">
+          <thead><tr>
+            <th>Véhicule</th><th>Score</th><th>Statut</th>
+            <th>Coût total</th><th>Pannes</th><th>Atelier</th>
+          </tr></thead>
+          <tbody id="vehTbody">
+            <tr><td colspan="6" class="table-empty">Lancez l'analyse pour voir le classement.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="vtCard" style="display:none">
+      <div class="card-title">📋 Visites techniques — suivi par Statuts</div>
+      <div id="vtGrid"></div>
+    </div>
+
+    <div class="card" id="atelierCard" style="display:none">
+      <div class="card-title">🔧 En atelier — durées d'immobilisation</div>
+      <div id="atelierList"></div>
+    </div>
+
+  </section>
+
+  <!-- ─── BUDGETS ───────────────────────────────────────── -->
+  <section class="tab" id="tab-budgets">
+
+    <div class="budget-summary" id="budgetSummary">
+      <div class="bs-placeholder">Lancez l'analyse pour voir la synthèse budgétaire.</div>
+    </div>
+
+    <!-- Économies IA -->
+    <div class="gemini-savings-card" id="savingsCard" style="display:none">
+      <div class="gsc-header">
+        <span>🤖 Économie potentielle estimée par IA</span>
+        <div class="gsc-score" id="savingsScore"></div>
+      </div>
+      <div class="gsc-amount" id="savingsAmount"></div>
+      <div class="gsc-synthese" id="savingsSynthese"></div>
+      <div id="savingsLeviers"></div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="card-title">💰 Répartition budgétaire (carburant + entretien + groupe élect.)</div>
+      <div class="chart-wrap"><canvas id="chartBudget"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏆 Top coûts par véhicule</div>
+      <div class="chart-wrap-lg"><canvas id="chartCoutVeh"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⛽ Détail carburant</div>
+      <div id="carbDetail"></div>
+    </div>
+
+  </section>
+
+  <!-- ─── DÉCISIONS ────────────────────────────────────── -->
+  <section class="tab" id="tab-decisions">
+
+    <div class="niveau-nav">
+      <button class="niveau-btn active" data-niveau="n1">N1 · Opérationnel</button>
+      <button class="niveau-btn" data-niveau="n2">N2 · Indicateurs</button>
+      <button class="niveau-btn" data-niveau="n3">N3 · Décisions</button>
+    </div>
+
+    <div class="niveau-panel active" id="panel-n1">
+      <div class="niveau-intro">
+        <div class="ni-badge">N1</div>
+        <div>
+          <div class="ni-title">Suivi opérationnel</div>
+          <div class="ni-q">Question : <em>Que se passe-t-il ?</em></div>
+        </div>
+      </div>
+      <div id="n1Content"></div>
+    </div>
+
+    <div class="niveau-panel" id="panel-n2">
+      <div class="niveau-intro">
+        <div class="ni-badge ni-badge-2">N2</div>
+        <div>
+          <div class="ni-title">Indicateurs d'analyse</div>
+          <div class="ni-q">Question : <em>Pourquoi ça se passe comme ça ?</em></div>
+        </div>
+      </div>
+      <div id="n2Content"></div>
+    </div>
+
+    <div class="niveau-panel" id="panel-n3">
+      <div class="niveau-intro">
+        <div class="ni-badge ni-badge-3">N3</div>
+        <div>
+          <div class="ni-title">Pilotage décisionnel</div>
+          <div class="ni-q">Question : <em>Que doit-on faire ?</em></div>
+        </div>
+      </div>
+      <div id="n3Content"></div>
+    </div>
+
+  </section>
+
+  <!-- ─── GEMINI AI ─────────────────────────────────────── -->
+  <section class="tab" id="tab-ia">
+
+    <div class="ia-hero" id="geminiHero">
+      <div class="gh-icon">🤖</div>
+      <div class="gh-title">IA — Analyse intelligente</div>
+      <div class="gh-sub">Lancez une analyse pour voir les recommandations intelligentes.</div>
+    </div>
+
+    <!-- Score & maturité -->
+    <div class="card" id="geminiScoreCard" style="display:none">
+      <div class="card-title">🎯 Score de gestion du parc</div>
+      <div id="geminiScoreContent"></div>
+    </div>
+
+    <!-- VT — Analyse juridique -->
+    <div class="card" id="geminiVtCard" style="display:none">
+      <div class="card-title">⚖️ Analyse juridique VT — IA</div>
+      <div id="geminiVtContent"></div>
+    </div>
+
+    <!-- Budget & Leviers -->
+    <div class="card" id="geminiLevCard" style="display:none">
+      <div class="card-title">💡 Leviers d'optimisation budgétaire</div>
+      <div id="geminiLevContent"></div>
+    </div>
+
+    <!-- Groupe électrogène AI -->
+    <div class="card" id="geminiGenCard2" style="display:none">
+      <div class="card-title">⚡ Diagnostic groupe électrogène — IA</div>
+      <div id="geminiGenContent2"></div>
+    </div>
+
+    <!-- Chat IA — Interface complète -->
+    <div class="chatbot-container" id="iaChatCard">
+
+      <!-- En-tête chatbot -->
+      <div class="chatbot-header">
+        <div class="chatbot-avatar">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <circle cx="11" cy="11" r="11" fill="url(#gemGrad)"/>
+            <path d="M7 11 C7 8.8 8.8 7 11 7 C13.2 7 15 8.8 15 11" stroke="white" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+            <circle cx="8.5" cy="13" r="1.2" fill="white"/>
+            <circle cx="13.5" cy="13" r="1.2" fill="white"/>
+            <defs><linearGradient id="gemGrad" x1="0" y1="0" x2="22" y2="22"><stop offset="0%" stop-color="#4285f4"/><stop offset="100%" stop-color="#9c27b0"/></linearGradient></defs>
+          </svg>
+        </div>
+        <div class="chatbot-header-info">
+          <div class="chatbot-name">Assistant FleetInsight IA</div>
+          <div class="chatbot-status" id="chatStatus">
+            <span class="chat-status-dot"></span>En ligne · Gemini 2.5 Flash
+          </div>
+        </div>
+        <button class="chatbot-clear-btn" id="btnClearChat" title="Effacer la conversation">🗑️</button>
+      </div>
+
+      <!-- Fenêtre de messages -->
+      <div class="chatbot-messages" id="iaChatWindow">
+        <!-- Message de bienvenue injecté par JS -->
+      </div>
+
+      <!-- Suggestions de questions rapides -->
+      <div class="chatbot-suggestions" id="chatSuggestions">
+        <div class="suggestions-label">Questions fréquentes :</div>
+        <div class="suggestions-grid" id="suggestionsGrid"></div>
+      </div>
+
+      <!-- Zone de saisie -->
+      <div class="chatbot-input-area">
+        <div class="chatbot-input-row">
+          <textarea
+            id="iaChatQuestion"
+            class="chatbot-textarea"
+            placeholder="Posez votre question sur le parc automobile…"
+            rows="1"
+          ></textarea>
+          <button class="chatbot-send-btn" id="btnAskIA" title="Envoyer">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M2 9L16 2L9 16L8 10L2 9Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+        <div class="chatbot-hint">Entrée pour envoyer · Shift+Entrée pour nouvelle ligne</div>
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- ─── RAPPORT ───────────────────────────────────────── -->
+  <section class="tab" id="tab-rapport">
+
+    <div class="card">
+      <div class="card-title">📄 Générer le rapport de parc</div>
+      <div class="card-desc">
+        Rapport complet : KPIs, alertes, VT, budget (carburant + entretien + groupe élect.),
+        plan de renouvellement, recommandations IA.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Titre</label>
+        <input type="text" id="reportTitle" class="form-input"
+               value="FleetInsight AI — Rapport de Suivi du Parc Automobile"/>
+      </div>
+      <div class="form-row">
+        <button class="btn btn-primary"   id="btnPdf"  disabled>📕 PDF</button>
+        <button class="btn btn-secondary" id="btnWord" disabled>📘 Word</button>
+      </div>
+    </div>
+
+    <div class="card" id="reportPreview" style="display:none">
+      <div class="card-title">👁️ Aperçu</div>
+      <div id="reportPreviewContent"></div>
+    </div>
+
+  </section>
+
+</main>
+
+<!-- ═══════════════════ LOADER ════════════════════════════ -->
+<div class="loader" id="loader" style="display:none">
+  <div class="loader-box">
+    <div class="loader-ring"></div>
+    <div class="loader-text" id="loaderText">Analyse en cours…</div>
+    <div class="loader-sub"  id="loaderSub">Traitement des données</div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script src="taskpane.js"></script>
+</body>
+</html>

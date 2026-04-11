@@ -1,0 +1,14 @@
+# render.yaml
+services:
+  - type: web
+    name: datainsight-ai-backend
+    env: python
+    region: frankfurt          # plus proche de l'Afrique de l'Ouest
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0

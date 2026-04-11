@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: lca-insight-ai-backend
+    runtime: python
+    region: frankfurt          # Choose the region closest to your users
+    plan: starter              # Upgrade to standard for production
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 2
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ENV
+        value: production
+    healthCheckPath: /health
+    autoDeploy: true
