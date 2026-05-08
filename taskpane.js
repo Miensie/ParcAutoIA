@@ -14,7 +14,7 @@ const setDisplay = (id, val) => { const el = safeEl(id); if (el) el.style.displa
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CFG = {
-  API: "https://fleetinsight-ai.onrender.com",  // ← URL Render
+  API: "https://parcautoia.onrender.com",  // ← URL Render
   TIMEOUT: 90_000,
 };
 
