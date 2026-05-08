@@ -1,3 +1,7 @@
+// ─── HELPERS — getElementById avec null-guard ────────────────────────────────
+const safeEl = id => document.getElementById(id);
+const setDisplay = (id, val) => { const el = safeEl(id); if (el) el.style.display = val; };
+
 /**
  * FleetInsight AI — Taskpane Controller v2.2
  * ============================================
@@ -10,7 +14,7 @@
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CFG = {
-  API: "https://parcautoia.onrender.com",  // ← URL Render
+  API: "https://fleetinsight-ai.onrender.com",  // ← URL Render
   TIMEOUT: 90_000,
 };
 
@@ -1188,18 +1192,19 @@ function bindEvents() {
   document.getElementById("btnAnalyze").addEventListener("click", runAnalysis);
   document.getElementById("btnPdf").addEventListener("click",  ()=>downloadReport("pdf"));
   document.getElementById("btnWord").addEventListener("click", ()=>downloadReport("word"));
-  // Véhicule — sera initialisé après définition de la fonction
-  setTimeout(() => { if (typeof bindVehiculeEvents === "function") bindVehiculeEvents(); }, 0);
+
 }
 
 Office.onReady(info => {
   if (info.host === Office.HostType.Excel) {
     initNav();
     bindEvents();
+    bindVehiculeEvents();
     checkHealth();
     toast("FleetInsight AI","Chargez votre classeur .xlsm pour commencer.","info",3000);
   }
 });
+
 
 // ═══════════════════════════════════════════════════════════════
 // ONGLET VÉHICULE — Recherche par immatriculation
