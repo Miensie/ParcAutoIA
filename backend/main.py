@@ -49,7 +49,7 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="FleetInsight AI",
-    description="Analyse intelligente de parc automobile — Powered by IA",
+    description="Analyse intelligente de parc automobile — Powered by Gemini AI",
     version="2.2.0",
 )
 
@@ -134,30 +134,6 @@ async def analyze(payload: FleetPayload):
         return JSONResponse(content=_safe(response))
     except Exception as e:
         raise HTTPException(500, f"Erreur d'analyse : {e}")
-
-
-@app.post("/ask")
-async def ask(payload: dict):
-    question = payload.get("question", "").strip()
-    analysis = payload.get("analysis") or {}
-    gemini = payload.get("gemini") or {}
-
-    if not question:
-        raise HTTPException(400, "La question est vide.")
-    if not analysis:
-        raise HTTPException(400, "Analyse manquante dans la requête.")
-
-    if not (GEMINI_OK and os.getenv("GEMINI_API_KEY")):
-        raise HTTPException(503, "IA non configurée côté serveur.")
-
-    try:
-        response = await run_gemini_analysis(analysis)
-        # s'il y a un nouveau contexte ou état dans response, on peut l'utiliser mais ici on envoie directement la question.
-        from gemini_advisor import answer_question
-        answer = await answer_question(analysis, question)
-        return JSONResponse(content=_safe({"question": question, **answer}))
-    except Exception as e:
-        raise HTTPException(500, f"Erreur IA : {e}")
 
 
 @app.post("/report")
@@ -391,6 +367,125 @@ def _make_word(payload: ReportPayload) -> bytes:
     buf.seek(0)
     return buf.read()
 
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ENDPOINT : /chat  (Chatbot IA en temps réel)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ChatPayload(BaseModel):
+    question: str
+    analysis: dict   # résultat /analyze stocké côté client
+
+@app.post("/chat", tags=["Chat"])
+async def chat(payload: ChatPayload):
+    """
+    Répond à une question en langage naturel sur le parc auto via Gemini AI.
+    Nécessite le résultat d'analyse passé en contexte.
+    """
+    if not payload.question.strip():
+        raise HTTPException(400, "La question est vide.")
+
+    if not GEMINI_OK or not os.getenv("GEMINI_API_KEY"):
+        # Fallback local si IA non dispo
+        return JSONResponse(content={
+            "reponse": _local_fallback(payload.question, payload.analysis),
+            "ia_used": False,
+        })
+
+    try:
+        from gemini_advisor import chat_with_ia
+        result = await chat_with_ia(payload.question, payload.analysis)
+        return JSONResponse(content={
+            "reponse": result.get("reponse", "Pas de réponse."),
+            "ia_used": not result.get("error", False),
+        })
+    except Exception as e:
+        return JSONResponse(content={
+            "reponse": _local_fallback(payload.question, payload.analysis),
+            "ia_used": False,
+            "error": str(e),
+        })
+
+
+def _local_fallback(question: str, analysis: dict) -> str:
+    """Réponses locales si Gemini indisponible — utilise les données réelles."""
+    q   = question.lower()
+    ops = analysis.get("niveau_1_operationnel", {})
+    ind = analysis.get("niveau_2_indicateurs",  {})
+    dec = analysis.get("niveau_3_decisions",     {})
+    vt  = ops.get("vt", {})
+    conf= ind.get("conformite_vt", {})
+    taux= ind.get("taux_immobilisation", {})
+    carb= ops.get("carburant", {})
+    entr= ops.get("entretien", {})
+    gen = ops.get("generateur", {})
+    optim = dec.get("optimisation", {})
+
+    if any(k in q for k in ["vt","visite","conformité","conformite"]):
+        return (f"Conformité VT : {conf.get('taux_conformite','—')}% — "
+                f"{vt.get('oui',0)} OK, {vt.get('non',0)} non faites, "
+                f"{vt.get('pas_encore',0)} pas encore. "
+                f"Risque : {conf.get('niveau_risque','—')}.")
+    if any(k in q for k in ["budget","coût","cout","dépense","economie","économie"]):
+        return (f"Budget total parc : {optim.get('total_fmt','—')}. "
+                f"Carburant : {_fmt(carb.get('total_depense'))}, "
+                f"Entretien : {_fmt(entr.get('total_depense'))}, "
+                f"Groupe élect. : {_fmt(gen.get('total_depense',0))}.")
+    if any(k in q for k in ["atelier","immobilisation","disponibilité","disponibilite"]):
+        return (f"Disponibilité du parc : {taux.get('taux_dispo','—')}%. "
+                f"{taux.get('en_atelier',0)} véhicule(s) actuellement en atelier.")
+    if any(k in q for k in ["alerte","urgent","critique","priorité","priorite"]):
+        alertes = dec.get("alertes", [])
+        crit = [a for a in alertes if a.get("niveau") == "CRITIQUE"]
+        if crit:
+            return f"{len(crit)} alerte(s) critique(s) : " + " | ".join(a.get("titre","") for a in crit[:3])
+        return f"{len(alertes)} alerte(s) active(s) — aucune critique."
+    if any(k in q for k in ["électrogène","electrogene","generateur","générateur"]):
+        return (f"Groupe électrogène : {_fmt(gen.get('total_depense',0))} de dépenses, "
+                f"{gen.get('nb_entrees',0)} transaction(s)." if gen.get("disponible")
+                else "Données groupe électrogène non disponibles.")
+    if any(k in q for k in ["carburant","essence","gasoil","fuel"]):
+        top = carb.get("top_consommateurs", [])
+        top1 = top[0] if top else None
+        return (f"Budget carburant : {_fmt(carb.get('total_depense'))} "
+                f"({carb.get('nb_transactions',0)} transactions). "
+                + (f"Top consommateur : {top1['vehicule']} ({top1['total_fmt']})." if top1 else ""))
+    return ("Je n'ai pas pu analyser cette question précisément. "
+            "Consultez les onglets Décisions ou Tableau de bord pour plus de détails.")
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ENDPOINT : /vehicle  (Fiche véhicule par immatriculation)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class VehiclePayload(BaseModel):
+    sheets: dict[str, list[dict]]
+    immat: str
+
+@app.post("/vehicle", tags=["Vehicle"])
+async def vehicle_search(payload: VehiclePayload):
+    """
+    Recherche toutes les informations d'un véhicule par immatriculation.
+    Croise : LISTE DE VEH, SUIVI_CARBURANT, ENTRETIEN, VT, SORTIES VEH.
+    """
+    if not payload.immat.strip():
+        raise HTTPException(400, "Immatriculation vide.")
+    try:
+        from vehicle_search import search_vehicle
+        result = search_vehicle(payload.sheets, payload.immat)
+        return JSONResponse(content=result)
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de recherche : {e}")
+
+
+@app.get("/vehicle/list", tags=["Vehicle"])
+async def vehicle_list():
+    """Retourne la liste de toutes les immatriculations connues (pour autocomplete)."""
+    # Cette endpoint est appelée avec les sheets en POST
+    return JSONResponse(content={"message": "Utilisez POST /vehicle avec la liste des feuilles."})
 
 if __name__ == "__main__":
     import uvicorn
