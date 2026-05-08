@@ -4,13 +4,13 @@
  * - Gpe électrogène intégrée (N1/N2/N3 + onglet dédié)
  * - Dates corrigées (affichage JJ/MM/AAAA depuis le backend)
  * - Décisions 100% basées sur données réelles
- * - IA : résumé exécutif, économies, VT juridique, générateur
+ * - Gemini AI : résumé exécutif, économies, VT juridique, générateur
  */
 "use strict";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CFG = {
-  API: "https://parcautoia.onrender.com",  // ← URL Render
+  API: "https://fleetinsight-ai.onrender.com",  // ← URL Render
   TIMEOUT: 90_000,
 };
 
@@ -55,36 +55,25 @@ const fmtKm = n => {
 const scoreColor = s =>
   s>=80?"#10b981":s>=60?"#3b82f6":s>=40?"#f59e0b":s>=20?"#f97316":"#ef4444";
 
-const killChart = id => { 
-  if (typeof Chart === 'undefined') return;
-  if (S.charts[id]) { S.charts[id].destroy(); delete S.charts[id]; } 
-};
-
-const safeEl = id => document.getElementById(id) || null;
-const setDisplay = (id, value) => { const el = safeEl(id); if (el) el.style.display = value; };
-const setText = (id, value) => { const el = safeEl(id); if (el) el.textContent = value; };
+const killChart = id => { if (S.charts[id]) { S.charts[id].destroy(); delete S.charts[id]; } };
 
 // ─── STATUS / LOADER / TOAST ─────────────────────────────────────────────────
 
 const setStatus = (lbl, state="ok") => {
-  const connLabel = safeEl("connLabel");
-  if (connLabel) connLabel.textContent = lbl;
-  const d = safeEl("connDot");
-  if (d) {
-    d.className = "conn-dot";
-    d.classList.remove("busy", "off");
-    if (state === "busy") d.classList.add("busy");
-    if (state === "off") d.classList.add("off");
-  }
+  document.getElementById("connLabel").textContent = lbl;
+  const d = document.getElementById("connDot");
+  d.className = "conn-dot";
+  if (state==="busy") d.classList.add("busy");
+  if (state==="off")  d.classList.add("off");
 };
 const showLoader = (txt,sub) => {
-  setText("loaderText", txt || "Traitement…");
-  setText("loaderSub", sub || "");
-  setDisplay("loader", "flex");
-  setStatus(txt, "busy");
+  document.getElementById("loaderText").textContent = txt||"Traitement…";
+  document.getElementById("loaderSub").textContent  = sub||"";
+  document.getElementById("loader").style.display   = "flex";
+  setStatus(txt,"busy");
 };
 const hideLoader = () => {
-  setDisplay("loader", "none");
+  document.getElementById("loader").style.display = "none";
   setStatus("Connecté");
 };
 const toast = (title,msg,type="info",ms=4500) => {
@@ -170,6 +159,7 @@ async function loadWorkbook() {
       S.sheets = payload;
       renderSheets(payload);
       document.getElementById("btnAnalyze").disabled = false;
+      buildImmatList();  // Activer l'autocomplete véhicule
       toast("Classeur chargé",`${Object.keys(payload).length} feuille(s) prêtes`,"success");
     });
   } catch(err) {
@@ -188,7 +178,7 @@ function renderSheets(payload) {
         <span class="sc-icon">${ICONS[name]||"📄"}</span>
         <div><div class="sc-name">${name}</div><div class="sc-rows">${rows.length} lignes</div></div>
       </div>`).join("");
-  setDisplay("sheetCard", "");
+  document.getElementById("sheetCard").style.display="";
 }
 
 // ─── ANALYSE ─────────────────────────────────────────────────────────────────
@@ -197,22 +187,18 @@ async function runAnalysis() {
   if (!S.sheets) { toast("Chargez d'abord le classeur","","warning"); return; }
   const useGemini = document.getElementById("useGemini").checked;
   showLoader(
-    useGemini ? "Analyse IA + IA…" : "Analyse IA…",
-    "N1 · N2 · N3" + (useGemini ? " · IA" : "")
+    useGemini ? "Analyse IA + Gemini…" : "Analyse IA…",
+    "N1 · N2 · N3" + (useGemini ? " · Gemini AI" : "")
   );
   try {
     const data = await callAPI("/analyze", { sheets:S.sheets, use_gemini:useGemini });
     S.result = data;
     S.gemini = data.gemini || null;
 
-    // Badge IA dans le header (étiquette geminiBadge conservée car ID utilisé par CSS/JS)
-    const badge = safeEl("geminiBadge");
-    if (badge) {
-      if (S.gemini && !S.gemini.error) {
-        badge.style.display = "flex";
-      } else {
-        badge.style.display = "none";
-      }
+    // Badge Gemini dans le header
+    const badge = document.getElementById("geminiBadge");
+    if (S.gemini && !S.gemini.error) {
+      badge.style.display = "flex";
     }
 
     renderKPIs(data.kpis);
@@ -229,8 +215,8 @@ async function runAnalysis() {
     document.getElementById("btnWord").disabled = false;
 
     const msg = S.gemini && !S.gemini.error
-      ? "3 niveaux + IA générés ✓"
-      : "3 niveaux générés (IA désactivée)";
+      ? "3 niveaux + Gemini AI générés ✓"
+      : "3 niveaux générés (Gemini désactivé)";
     toast("Analyse terminée", msg, "success");
     document.querySelector('[data-tab="tableau"]').click();
   } catch(err) {
@@ -257,8 +243,8 @@ function renderKPIs(kpis=[]) {
 function renderAlertes(alertes) {
   const card = document.getElementById("alertesCard");
   const list = document.getElementById("alertesList");
-  if (!alertes.length) { setDisplay("alertesCard", "none"); return; }
-  setDisplay("alertesCard", "");
+  if (!alertes.length) { card.style.display="none"; return; }
+  card.style.display = "";
 
   const groups = {};
   alertes.forEach(a => {
@@ -295,10 +281,6 @@ function renderAlertes(alertes) {
 // ─── CHARTS TABLEAU DE BORD ───────────────────────────────────────────────────
 
 function renderCharts(result) {
-  if (typeof Chart === 'undefined') {
-    console.warn("Chart.js not loaded yet. Skipping chart rendering.");
-    return;
-  }
   const ops = result.niveau_1_operationnel;
   const ind = result.niveau_2_indicateurs;
 
@@ -428,7 +410,8 @@ function renderVehicules(result) {
   });
 
   // VT par statuts
-  setDisplay("vtCard", "");
+  const vtCard = document.getElementById("vtCard");
+  vtCard.style.display = "";
   const RISK_C = {"CRITIQUE":"#ef4444","ÉLEVÉ":"#f97316","MODÉRÉ":"#f59e0b","FAIBLE":"#10b981"};
   const conf = result.niveau_2_indicateurs?.conformite_vt||{};
   const riskC = RISK_C[conf.niveau_risque]||"#8fa3c0";
@@ -522,17 +505,13 @@ function renderVehicules(result) {
           ${v.duree_jours!=null?`<div style="font-size:10px;color:${v.duree_jours>14?'#ef4444':'#f59e0b'}">${v.duree_jours} j d'immo.</div>`:""}
         </div>
       </div>`).join("");
-    setDisplay("atelierCard", "");
+    document.getElementById("atelierCard").style.display = "";
   }
 }
 
 // ─── BUDGETS ─────────────────────────────────────────────────────────────────
 
 function renderBudgets(result) {
-  if (typeof Chart === 'undefined') {
-    console.warn("Chart.js not loaded yet. Skipping budget chart rendering.");
-    return;
-  }
   const ops   = result.niveau_1_operationnel;
   const dec   = result.niveau_3_decisions;
   const optim = dec.optimisation||{};
@@ -566,18 +545,18 @@ function renderBudgets(result) {
     <div class="bs-card">
       <div class="bs-val" style="color:#3b82f6">${optim.total_fmt||"—"}</div>
       <div class="bs-label">💰 Total parc</div>
-      <div style="margin-top:8px;font-size:10px;color:#10b981">Éco. IA : ${optim.economie_fmt||"calculé…"}</div>
+      <div style="margin-top:8px;font-size:10px;color:#10b981">Éco. Gemini : ${optim.economie_fmt||"calculé…"}</div>
     </div>`;
 
-  // IA savings
+  // Gemini savings
   const savings = result.gemini?.budget_et_economies;
-  const scCard  = safeEl("savingsCard");
+  const scCard  = document.getElementById("savingsCard");
   if (savings && !savings.error && !savings.parse_error && savings.economie_fmt) {
-    if (scCard) scCard.style.display = "";
-    const savingsScore = safeEl("savingsScore"); if (savingsScore) savingsScore.textContent =
+    scCard.style.display = "";
+    document.getElementById("savingsScore").textContent =
       `Score ${savings.score_gestion||"—"}/100 · ${savings.niveau_maturite||"—"}`;
-    const savingsAmount = safeEl("savingsAmount"); if (savingsAmount) savingsAmount.textContent = savings.economie_fmt||"—";
-    const savingsSynthese = safeEl("savingsSynthese"); if (savingsSynthese) savingsSynthese.textContent = savings.synthese||"";
+    document.getElementById("savingsAmount").textContent = savings.economie_fmt||"—";
+    document.getElementById("savingsSynthese").textContent = savings.synthese||"";
     const leviers = savings.leviers||[];
     document.getElementById("savingsLeviers").innerHTML = leviers.length
       ? leviers.map(l=>`
@@ -590,13 +569,12 @@ function renderBudgets(result) {
             </div>
           </div>`).join("")
       : "";
-  } else { if (scCard) scCard.style.display="none"; }
+  } else { scCard.style.display="none"; }
 
   // Donut budget
-  if (typeof Chart !== 'undefined') {
-    killChart("chartBudget");
-    if (tt>0) {
-      S.charts.chartBudget = new Chart(document.getElementById("chartBudget"), {
+  killChart("chartBudget");
+  if (tt>0) {
+    S.charts.chartBudget = new Chart(document.getElementById("chartBudget"), {
       type:"doughnut",
       data:{
         labels:["⛽ Carburant","🔧 Entretien","⚡ Groupe Élect."],
@@ -606,12 +584,11 @@ function renderBudgets(result) {
         plugins:{legend:{position:"right",labels:{color:"#8fa3c0",font:{size:10},boxWidth:12}}},
         scales:{}},
     });
-    }
   }
 
   // Bar coût/véhicule
   const couts = (result.niveau_2_indicateurs?.cout_par_vehicule||[]).slice(0,10);
-  if (couts.length && typeof Chart !== 'undefined') {
+  if (couts.length) {
     killChart("chartCoutVeh");
     S.charts.chartCoutVeh = new Chart(document.getElementById("chartCoutVeh"), {
       type:"bar",
@@ -649,10 +626,6 @@ function renderBudgets(result) {
 // ─── GROUPE ÉLECTROGÈNE ───────────────────────────────────────────────────────
 
 function renderGenerateur(result) {
-  if (typeof Chart === 'undefined') {
-    console.warn("Chart.js not loaded yet. Skipping generator chart rendering.");
-    return;
-  }
   const gen    = result.niveau_1_operationnel?.generateur||{};
   const gen_ind= result.niveau_2_indicateurs?.indicateurs_generateur||{};
   const gen_dec= result.niveau_3_decisions?.decisions_generateur||{};
@@ -665,66 +638,65 @@ function renderGenerateur(result) {
   }
 
   // N1 — Opérationnel
-  const genN1 = document.getElementById("genN1Content");
-  if (genN1) {
-    genN1.innerHTML = `
-      <div class="gen-stat-row">
-        <div class="gen-stat"><span class="gen-val stat-cyan">${fmtF(gen.total_depense)}</span><span class="gen-lbl">Dépense totale</span></div>
-        <div class="gen-stat"><span class="gen-val">${gen.nb_entrees||0}</span><span class="gen-lbl">Transactions</span></div>
-        <div class="gen-stat"><span class="gen-val">${fmtF(gen.cout_moyen)}</span><span class="gen-lbl">Coût moyen</span></div>
-      </div>
-      <div style="font-size:11px;color:var(--text-2);margin-bottom:8px">
-        📅 Période : <strong>${gen.date_min||"—"}</strong> → <strong>${gen.date_max||"—"}</strong>
-        ${gen.nb_jours_couverts?` (${gen.nb_jours_couverts} jours)`:""}
-      </div>
-      ${(gen.repartition_produit||[]).length?`
-        <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:4px">Répartition produit</div>
-        ${gen.repartition_produit.map(p=>`
-          <div class="mbar-row">
-            <span class="mbar-label">${p.produit}</span>
-            <div class="mbar-track"><div class="mbar-fill" style="width:${p.pct}%;background:var(--cyan)"></div></div>
-            <span class="mbar-count">${p.pct}%</span>
-          </div>`).join("")}`:""}
-      ${(gen.par_mois||[]).length?`
-        <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin:8px 0 4px">Par mois</div>
-        <table class="mini-tbl">
-          <thead><tr><th>Mois</th><th>Total</th></tr></thead>
-          <tbody>${gen.par_mois.map(m=>`
-            <tr>
-              <td style="color:var(--text-2)">${m.mois}</td>
-              <td class="carb-val">${fmtF(m.total)}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>`:""}`;
-  }
+  document.getElementById("genN1Content").innerHTML = `
+    <div class="gen-stat-row">
+      <div class="gen-stat"><span class="gen-val stat-cyan">${fmtF(gen.total_depense)}</span><span class="gen-lbl">Dépense totale</span></div>
+      <div class="gen-stat"><span class="gen-val">${gen.nb_entrees||0}</span><span class="gen-lbl">Transactions</span></div>
+      <div class="gen-stat"><span class="gen-val">${fmtF(gen.cout_moyen)}</span><span class="gen-lbl">Coût moyen</span></div>
+    </div>
+    <div style="font-size:11px;color:var(--text-2);margin-bottom:8px">
+      📅 Période : <strong>${gen.date_min||"—"}</strong> → <strong>${gen.date_max||"—"}</strong>
+      ${gen.nb_jours_couverts?` (${gen.nb_jours_couverts} jours)`:""}
+    </div>
+    ${(gen.repartition_produit||[]).length?`
+      <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:4px">Répartition produit</div>
+      ${gen.repartition_produit.map(p=>`
+        <div class="mbar-row">
+          <span class="mbar-label">${p.produit}</span>
+          <div class="mbar-track"><div class="mbar-fill" style="width:${p.pct}%;background:var(--cyan)"></div></div>
+          <span class="mbar-count">${p.pct}%</span>
+        </div>`).join("")}`:""}
+    ${(gen.par_mois||[]).length?`
+      <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin:8px 0 4px">Par mois</div>
+      <table class="mini-tbl">
+        <thead><tr><th>Mois</th><th>Total</th></tr></thead>
+        <tbody>${gen.par_mois.map(m=>`
+          <tr>
+            <td style="color:var(--text-2)">${m.mois}</td>
+            <td class="carb-val">${fmtF(m.total)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>`:""}`;
 
   // N2 — Indicateurs
-  const genN2Card = document.getElementById("genN2Card");
-  const genN2Content = document.getElementById("genN2Content");
-  if (genN2Card && genN2Content) {
-    genN2Card.style.display = "";
-    genN2Content.innerHTML = `
-      <div class="gen-stat-row">
-        <div class="gen-stat">
-          <span class="gen-val" style="color:var(--cyan)">${gen_ind.nb_agences||0}</span>
-          <span class="gen-lbl">Agences</span>
-        </div>
-        <div class="gen-stat">
-          <span class="gen-val">${fmtF(gen_ind.cout_moyen_agence)}</span>
-          <span class="gen-lbl">Coût moy./agence</span>
-        </div>
+  document.getElementById("genN2Card").style.display = "";
+  document.getElementById("genN2Content").innerHTML = `
+    <div class="gen-stat-row">
+      <div class="gen-stat">
+        <span class="gen-val" style="color:var(--cyan)">${gen_ind.nb_agences||0}</span>
+        <span class="gen-lbl">Agences</span>
       </div>
-      ${gen_ind.top_agence?`
-        <div style="font-size:11px;color:var(--text-2)">
-          🏆 Top agence : <strong style="color:var(--cyan)">${gen_ind.top_agence.agence}</strong>
-          — ${gen_ind.top_agence.fmt}
-        </div>`:""}`
-  }
+      <div class="gen-stat">
+        <span class="gen-val">${fmtF(gen_ind.cout_moyen_agence)}</span>
+        <span class="gen-lbl">Coût moy./agence</span>
+      </div>
+      <div class="gen-stat">
+        <span class="gen-val" style="color:${(gen_ind.frequence_par_semaine||0)>3?'#ef4444':'#10b981'}">
+          ${gen_ind.frequence_par_semaine||0}
+        </span>
+        <span class="gen-lbl">Ravi./semaine</span>
+      </div>
+    </div>
+    ${gen_ind.top_agence?`
+      <div style="font-size:11px;color:var(--text-2)">
+        🏆 Top agence : <strong style="color:var(--cyan)">${gen_ind.top_agence.agence}</strong>
+        — ${gen_ind.top_agence.fmt}
+      </div>`:""}`
 
   // Graphique par agence
   const ag_data = (gen.cout_par_agence||[]).slice(0,8);
   if (ag_data.length) {
-    setDisplay("genChartCard", "");
+    document.getElementById("genChartCard").style.display="";
     killChart("chartGenDetail");
     S.charts.chartGenDetail = new Chart(document.getElementById("chartGenDetail"), {
       type:"bar",
@@ -742,11 +714,11 @@ function renderGenerateur(result) {
     });
   }
 
-  // N3 — Décisions (IA)
+  // N3 — Décisions (Gemini AI)
   const geminiGenCard = document.getElementById("genGeminiCard");
   const geminiGenContent = document.getElementById("genGeminiContent");
 
-  if (gen_ai && !gen_ai.error && !gen_ai.parse_error && geminiGenCard) {
+  if (gen_ai && !gen_ai.error && !gen_ai.parse_error) {
     geminiGenCard.style.display="";
     const nivChip = gen_ai.niveau_consommation
       ? `<span class="gen-niveau-chip gen-${gen_ai.niveau_consommation}">${gen_ai.niveau_consommation}</span>`
@@ -765,8 +737,8 @@ function renderGenerateur(result) {
         </div>`:""}`;
   } else if (gen_dec.recommandations) {
     // Fallback sans Gemini : décisions locales
-    if (geminiGenCard) geminiGenCard.style.display="";
-    if (geminiGenContent) geminiGenContent.innerHTML = `
+    geminiGenCard.style.display="";
+    geminiGenContent.innerHTML = `
       ${gen_dec.recommandations.map(r=>`
         <div class="reco-item"><span class="reco-arrow">→</span><span class="reco-text">${r}</span></div>`).join("")}`;
   }
@@ -786,134 +758,134 @@ function renderDecisions(result) {
   const sort = ops.sorties||{};
   const conf = ind.conformite_vt||{};
   const taux = ind.taux_immobilisation||{};
-  const pannes = ind.frequence_pannes||[];
-  const couts  = (ind.cout_par_vehicule||[]).slice(0,8);
-  const gen_ind= ind.indicateurs_generateur||{};
   const RISK_C={"CRITIQUE":"#ef4444","ÉLEVÉ":"#f97316","MODÉRÉ":"#f59e0b","FAIBLE":"#10b981"};
 
   // ── N1 ────────────────────────────────────────────────────────────────────
-  const n1el = document.getElementById("n1Content");
-  if (n1el) {
-    n1el.innerHTML = `
-      <div class="niv-block">
-        <div class="niv-block-title">🚗 Inventaire — ${inv.total||0} véhicules</div>
-        ${(inv.par_type||[]).map(t=>`
-          <div class="mbar-row">
-            <span class="mbar-label">${t.label}</span>
-            <div class="mbar-track"><div class="mbar-fill" style="width:${t.value/(inv.total||1)*100}%;background:var(--amber)"></div></div>
-            <span class="mbar-count">${t.value}</span>
-          </div>`).join("")}
+  document.getElementById("n1Content").innerHTML = `
+    <div class="niv-block">
+      <div class="niv-block-title">🚗 Inventaire — ${inv.total||0} véhicules</div>
+      ${(inv.par_type||[]).map(t=>`
+        <div class="mbar-row">
+          <span class="mbar-label">${t.label}</span>
+          <div class="mbar-track"><div class="mbar-fill" style="width:${t.value/(inv.total||1)*100}%;background:var(--amber)"></div></div>
+          <span class="mbar-count">${t.value}</span>
+        </div>`).join("")}
+    </div>
+
+    <div class="niv-block" style="border-left:3px solid var(--amber)">
+      <div class="niv-block-title">⛽ Carburant — faits bruts</div>
+      <div class="stat-row">
+        <div class="stat-chip"><span class="stat-val stat-amber">${fmtF(carb.total_depense)}</span><span class="stat-lbl">Total</span></div>
+        <div class="stat-chip"><span class="stat-val">${carb.nb_transactions||0}</span><span class="stat-lbl">Transactions</span></div>
+        <div class="stat-chip"><span class="stat-val">${fmtF(carb.moyenne_par_transaction)}</span><span class="stat-lbl">Moy./transaction</span></div>
       </div>
+    </div>
 
-      <div class="niv-block" style="border-left:3px solid var(--amber)">
-        <div class="niv-block-title">⛽ Carburant — faits bruts</div>
-        <div class="stat-row">
-          <div class="stat-chip"><span class="stat-val stat-amber">${fmtF(carb.total_depense)}</span><span class="stat-lbl">Total</span></div>
-          <div class="stat-chip"><span class="stat-val">${carb.nb_transactions||0}</span><span class="stat-lbl">Transactions</span></div>
-          <div class="stat-chip"><span class="stat-val">${fmtF(carb.moyenne_par_transaction)}</span><span class="stat-lbl">Moy./transaction</span></div>
-        </div>
+    <div class="niv-block" style="border-left:3px solid var(--purple)">
+      <div class="niv-block-title">🔧 Entretien & Réparations — faits bruts</div>
+      <div class="stat-row">
+        <div class="stat-chip"><span class="stat-val">${entr.total_interventions||0}</span><span class="stat-lbl">Interventions</span></div>
+        <div class="stat-chip"><span class="stat-val stat-red">${entr.en_atelier||0}</span><span class="stat-lbl">En atelier ⚠️</span></div>
+        <div class="stat-chip"><span class="stat-val stat-amber">${fmtF(entr.total_depense)}</span><span class="stat-lbl">Coût total</span></div>
       </div>
+      ${(entr.categories||[]).map(c=>`
+        <div class="mbar-row">
+          <span class="mbar-label">${c.cat}</span>
+          <div class="mbar-track"><div class="mbar-fill" style="width:${c.count/(entr.total_interventions||1)*100}%;background:var(--purple)"></div></div>
+          <span class="mbar-count">${c.count}</span>
+        </div>`).join("")}
+    </div>
 
-      <div class="niv-block" style="border-left:3px solid var(--purple)">
-        <div class="niv-block-title">🔧 Entretien & Réparations — faits bruts</div>
-        <div class="stat-row">
-          <div class="stat-chip"><span class="stat-val">${entr.total_interventions||0}</span><span class="stat-lbl">Interventions</span></div>
-          <div class="stat-chip"><span class="stat-val stat-red">${entr.en_atelier||0}</span><span class="stat-lbl">En atelier ⚠️</span></div>
-          <div class="stat-chip"><span class="stat-val stat-amber">${fmtF(entr.total_depense)}</span><span class="stat-lbl">Coût total</span></div>
-        </div>
-        ${(entr.categories||[]).map(c=>`
-          <div class="mbar-row">
-            <span class="mbar-label">${c.cat}</span>
-            <div class="mbar-track"><div class="mbar-fill" style="width:${c.count/(entr.total_interventions||1)*100}%;background:var(--purple)"></div></div>
-            <span class="mbar-count">${c.count}</span>
-          </div>`).join("")}
+    <div class="niv-block" style="border-left:3px solid var(--amber)">
+      <div class="niv-block-title">📋 VT — faits bruts (colonne Statuts)</div>
+      <div class="stat-row">
+        <div class="stat-chip"><span class="stat-val">${vt.total||0}</span><span class="stat-lbl">Total VT</span></div>
+        <div class="stat-chip"><span class="stat-val stat-green">${vt.oui||0}</span><span class="stat-lbl">✅ Oui</span></div>
+        <div class="stat-chip"><span class="stat-val stat-red">${vt.non||0}</span><span class="stat-lbl">❌ Non</span></div>
+        <div class="stat-chip"><span class="stat-val stat-orange">${vt.pas_encore||0}</span><span class="stat-lbl">⏳ Pas encore</span></div>
       </div>
+    </div>
 
-      <div class="niv-block" style="border-left:3px solid var(--amber)">
-        <div class="niv-block-title">📋 VT — faits bruts (colonne Statuts)</div>
-        <div class="stat-row">
-          <div class="stat-chip"><span class="stat-val">${vt.total||0}</span><span class="stat-lbl">Total VT</span></div>
-          <div class="stat-chip"><span class="stat-val stat-green">${vt.oui||0}</span><span class="stat-lbl">✅ Oui</span></div>
-          <div class="stat-chip"><span class="stat-val stat-red">${vt.non||0}</span><span class="stat-lbl">❌ Non</span></div>
-          <div class="stat-chip"><span class="stat-val stat-orange">${vt.pas_encore||0}</span><span class="stat-lbl">⏳ Pas encore</span></div>
-        </div>
+    ${gen.disponible?`
+    <div class="niv-block" style="border-left:3px solid var(--cyan)">
+      <div class="niv-block-title">⚡ Gpe électrogène — faits bruts</div>
+      <div class="stat-row">
+        <div class="stat-chip"><span class="gen-val stat-cyan">${fmtF(gen.total_depense)}</span><span class="stat-lbl">Total dépenses</span></div>
+        <div class="stat-chip"><span class="gen-val">${gen.nb_entrees||0}</span><span class="stat-lbl">Transactions</span></div>
+        <div class="stat-chip"><span class="gen-val">${gen.date_min||"—"} → ${gen.date_max||"—"}</span><span class="stat-lbl">Période</span></div>
       </div>
+    </div>`:""}
 
-      ${gen.disponible?`
-      <div class="niv-block" style="border-left:3px solid var(--cyan)">
-        <div class="niv-block-title">⚡ Gpe électrogène — faits bruts</div>
-        <div class="stat-row">
-          <div class="stat-chip"><span class="gen-val stat-cyan">${fmtF(gen.total_depense)}</span><span class="stat-lbl">Total dépenses</span></div>
-          <div class="stat-chip"><span class="gen-val">${gen.nb_entrees||0}</span><span class="stat-lbl">Transactions</span></div>
-          <div class="stat-chip"><span class="gen-val">${gen.date_min||"—"} → ${gen.date_max||"—"}</span><span class="stat-lbl">Période</span></div>
-        </div>
-      </div>`:""}
-
-      <div class="niv-block">
-        <div class="niv-block-title">📍 Sorties — faits bruts</div>
-        <div class="stat-row">
-          <div class="stat-chip"><span class="stat-val">${sort.total_sorties||0}</span><span class="stat-lbl">Sorties</span></div>
-          <div class="stat-chip"><span class="stat-val">${sort.vehicules_actifs||0}</span><span class="stat-lbl">Véhicules actifs</span></div>
-          <div class="stat-chip"><span class="stat-val">${fmtKm(sort.km_total)}</span><span class="stat-lbl">KM total</span></div>
-        </div>
-      </div>`;
-  }
+    <div class="niv-block">
+      <div class="niv-block-title">📍 Sorties — faits bruts</div>
+      <div class="stat-row">
+        <div class="stat-chip"><span class="stat-val">${sort.total_sorties||0}</span><span class="stat-lbl">Sorties</span></div>
+        <div class="stat-chip"><span class="stat-val">${sort.vehicules_actifs||0}</span><span class="stat-lbl">Véhicules actifs</span></div>
+        <div class="stat-chip"><span class="stat-val">${fmtKm(sort.km_total)}</span><span class="stat-lbl">KM total</span></div>
+      </div>
+    </div>`;
 
   // ── N2 ────────────────────────────────────────────────────────────────────
-  const n2el = document.getElementById("n2Content");
-  if (n2el) {
-    n2el.innerHTML = `
-      <div class="niv-block" style="border-left:3px solid var(--purple)">
-        <div class="niv-block-title">🔧 Disponibilité du parc (entretien mécanique)</div>
-        <div class="gauge-wrap">
-          <div class="gauge-bar"><div class="gauge-fill" style="width:${taux.taux_dispo||0}%;background:${(taux.taux_dispo||0)>=85?'#10b981':'#ef4444'}"></div></div>
-          <div class="gauge-label">${taux.taux_dispo||0}% disponible — ${taux.disponibles||0}/${taux.total||0} véhicules · Taux immo. atelier : <strong>${taux.taux_immo||0}%</strong></div>
+  const pannes = ind.frequence_pannes||[];
+  const couts  = (ind.cout_par_vehicule||[]).slice(0,8);
+  const gen_ind= ind.indicateurs_generateur||{};
+
+  document.getElementById("n2Content").innerHTML = `
+    <div class="niv-block" style="border-left:3px solid var(--purple)">
+      <div class="niv-block-title">🔧 Disponibilité du parc (entretien mécanique)</div>
+      <div class="gauge-wrap">
+        <div class="gauge-bar"><div class="gauge-fill" style="width:${taux.taux_dispo||0}%;background:${(taux.taux_dispo||0)>=85?'#10b981':'#ef4444'}"></div></div>
+        <div class="gauge-label">${taux.taux_dispo||0}% disponible — ${taux.disponibles||0}/${taux.total||0} véhicules · Taux immo. atelier : <strong>${taux.taux_immo||0}%</strong></div>
+      </div>
+    </div>
+
+    <div class="niv-block" style="border-left:3px solid var(--amber)">
+      <div class="niv-block-title">📋 Conformité VT (basée sur Statuts)</div>
+      <div class="gauge-wrap">
+        <div class="gauge-bar"><div class="gauge-fill" style="width:${conf.taux_conformite||0}%;background:${(conf.taux_conformite||0)>=80?'#10b981':'#ef4444'}"></div></div>
+        <div class="gauge-label">${conf.taux_conformite||0}% conforme · Risque : <strong style="color:${RISK_C[conf.niveau_risque]||'#8fa3c0'}">${conf.niveau_risque||"—"}</strong></div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;font-size:10px">
+        <span style="color:#10b981">✅ ${conf.nb_conformes||0} conformes</span>
+        <span style="color:#ef4444">❌ ${conf.nb_non_conformes||0} non conformes</span>
+        <span style="color:#f59e0b">⏳ ${conf.nb_en_attente||0} en attente</span>
+      </div>
+    </div>
+
+    <div class="niv-block">
+      <div class="niv-block-title">💰 Coût par véhicule (percentiles réels)</div>
+      ${couts.map(v=>`
+        <div class="mbar-row">
+          <span class="mbar-label" title="${v.vehicule}">${v.vehicule}</span>
+          <div class="mbar-track"><div class="mbar-fill" style="width:${v.total/(couts[0]?.total||1)*100}%;background:var(--amber)"></div></div>
+          <span class="mbar-count">${fmtF(v.total)}</span>
+        </div>`).join("")}
+    </div>
+
+    <div class="niv-block">
+      <div class="niv-block-title">⚡ Pannes récurrentes (curatif uniquement)</div>
+      ${pannes.length?pannes.map(p=>`
+        <div class="mbar-row">
+          <span class="mbar-label">${p.vehicule}</span>
+          <div class="mbar-track"><div class="mbar-fill" style="width:${Math.min(100,p.nb_pannes*25)}%;background:${p.nb_pannes>=3?'#ef4444':'#f59e0b'}"></div></div>
+          <span class="mbar-count" style="color:${p.nb_pannes>=3?'#ef4444':'#f59e0b'}">${p.nb_pannes} panne(s)</span>
+        </div>`).join("")
+      :"<p style='color:var(--text-3);font-size:11px'>Aucune panne récurrente détectée.</p>"}
+    </div>
+
+    ${gen.disponible?`
+    <div class="niv-block" style="border-left:3px solid var(--cyan)">
+      <div class="niv-block-title">⚡ Indicateurs Gpe électrogène</div>
+      <div class="stat-row">
+        <div class="stat-chip"><span class="stat-val stat-cyan">${gen_ind.nb_agences||0}</span><span class="stat-lbl">Agences</span></div>
+        <div class="stat-chip"><span class="stat-val">${fmtF(gen_ind.cout_moyen_agence)}</span><span class="stat-lbl">Coût moy./agence</span></div>
+        <div class="stat-chip">
+          <span class="stat-val" style="color:${(gen_ind.frequence_par_semaine||0)>3?'#ef4444':'#10b981'}">${gen_ind.frequence_par_semaine||0}</span>
+          <span class="stat-lbl">Ravit./semaine</span>
         </div>
       </div>
+    </div>`:""}`;
 
-      <div class="niv-block" style="border-left:3px solid var(--amber)">
-        <div class="niv-block-title">📋 Conformité VT (basée sur Statuts)</div>
-        <div class="gauge-wrap">
-          <div class="gauge-bar"><div class="gauge-fill" style="width:${conf.taux_conformite||0}%;background:${(conf.taux_conformite||0)>=80?'#10b981':'#ef4444'}"></div></div>
-          <div class="gauge-label">${conf.taux_conformite||0}% conforme · Risque : <strong style="color:${RISK_C[conf.niveau_risque]||'#8fa3c0'}">${conf.niveau_risque||"—"}</strong></div>
-        </div>
-        <div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;font-size:10px">
-          <span style="color:#10b981">✅ ${conf.nb_conformes||0} conformes</span>
-          <span style="color:#ef4444">❌ ${conf.nb_non_conformes||0} non conformes</span>
-          <span style="color:#f59e0b">⏳ ${conf.nb_en_attente||0} en attente</span>
-        </div>
-      </div>
-
-      <div class="niv-block">
-        <div class="niv-block-title">💰 Coût par véhicule (percentiles réels)</div>
-        ${couts.map(v=>`
-          <div class="mbar-row">
-            <span class="mbar-label" title="${v.vehicule}">${v.vehicule}</span>
-            <div class="mbar-track"><div class="mbar-fill" style="width:${v.total/(couts[0]?.total||1)*100}%;background:var(--amber)"></div></div>
-            <span class="mbar-count">${fmtF(v.total)}</span>
-          </div>`).join("")}
-      </div>
-
-      <div class="niv-block">
-        <div class="niv-block-title">⚡ Pannes récurrentes (curatif uniquement)</div>
-        ${pannes.length?pannes.map(p=>`
-          <div class="mbar-row">
-            <span class="mbar-label">${p.vehicule}</span>
-            <div class="mbar-track"><div class="mbar-fill" style="width:${Math.min(100,p.nb_pannes*25)}%;background:${p.nb_pannes>=3?'#ef4444':'#f59e0b'}"></div></div>
-            <span class="mbar-count" style="color:${p.nb_pannes>=3?'#ef4444':'#f59e0b'}">${p.nb_pannes} panne(s)</span>
-          </div>`).join("")
-        :"<p style='color:var(--text-3);font-size:11px'>Aucune panne récurrente détectée.</p>"}
-      </div>
-
-      ${gen.disponible?`
-      <div class="niv-block" style="border-left:3px solid var(--cyan)">
-        <div class="niv-block-title">⚡ Indicateurs Gpe électrogène</div>
-        <div class="stat-row">
-          <div class="stat-chip"><span class="stat-val stat-cyan">${gen_ind.nb_agences||0}</span><span class="stat-lbl">Agences</span></div>
-          <div class="stat-chip"><span class="stat-val">${fmtF(gen_ind.cout_moyen_agence)}</span><span class="stat-lbl">Coût moy./agence</span></div>
-        </div>
-      </div>`:""}`;
-  }
   // ── N3 ────────────────────────────────────────────────────────────────────
   const plan_vt  = dec.plan_action_vt||{};
   const plan_veh = dec.plan_renouvellement||{};
@@ -923,11 +895,8 @@ function renderDecisions(result) {
     "REMPLACER":["s-REMPLACER","⛔"],"CRITIQUE":["s-CRITIQUE","🔴"],
     "SURVEILLER":["s-SURVEILLER","🟡"],"BON":["s-BON","🟢"],"OPTIMAL":["s-OPTIMAL","✅"]
   };
-  
-  const n3el = document.getElementById("n3Content");
-  if (!n3el) return; // Sortir si l'élément n'existe pas
 
-  n3el.innerHTML = `
+  document.getElementById("n3Content").innerHTML = `
     <!-- Plan VT -->
     <div class="niv-block" style="border-left:3px solid var(--amber)">
       <div class="niv-block-title">📋 Plan d'action VT — 3 priorités</div>
@@ -961,15 +930,9 @@ function renderDecisions(result) {
         </div>`:""}
 
       ${(plan_vt.p3_programmer?.count||0)?`
-        <div style="margin-bottom:10px">
+        <div>
           <div style="font-size:11px;font-weight:700;color:var(--text-2);margin-bottom:4px">🔵 P3 — Ce trimestre (${plan_vt.p3_programmer.count})</div>
-          <div style="font-size:10px;color:var(--text-3);margin-bottom:6px">Programmer dans le planning trimestriel.</div>
-          ${(plan_vt.p3_programmer?.vehicules||[]).map(v=>`
-            <div style="display:flex;justify-content:space-between;background:rgba(37,99,235,.08);border-left:3px solid #3b82f6;border-radius:4px;padding:6px 10px;margin-bottom:4px">
-              <div><span style="font-family:var(--font-display);color:#93c5fd">${v.vehicule}</span>
-                   <span style="font-size:9px;color:var(--text-3);margin-left:8px">${v.affectation||"—"}</span></div>
-              <span style="font-size:10px;color:#3b82f6">${v.jours_restants!=null?v.jours_restants+"j":"—"} · ${v.expiration||"—"}</span>
-            </div>`).join("")}
+          <div style="font-size:10px;color:var(--text-3)">Programmer dans le planning trimestriel.</div>
         </div>`:""}
     </div>
 
@@ -1010,7 +973,7 @@ function renderDecisions(result) {
       <div style="margin-bottom:8px;padding:8px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:6px">
         <span style="font-size:11px;color:#6ee7b7">
           Budget total : <strong>${optim.total_fmt||"—"}</strong> ·
-          Économie estimée : <strong>${optim.economie_fmt||"Calculé par IA"}</strong>
+          Économie estimée : <strong>${optim.economie_fmt||"Calculé par Gemini AI"}</strong>
         </span>
       </div>
       ${(optim.anomalies_detectees||[]).map(a=>`
@@ -1023,19 +986,18 @@ function renderDecisions(result) {
 // ─── GEMINI AI TAB ────────────────────────────────────────────────────────────
 
 function renderGemini(gemini) {
-  const hero = safeEl("geminiHero");
+  const hero = document.getElementById("geminiHero");
+
   if (!gemini || gemini.error) {
-    if (hero) {
-      const ghSub = hero.querySelector(".gh-sub");
-      if (ghSub) ghSub.textContent = gemini?.error
-        ? `IA indisponible : ${gemini.error}`
-        : "Activez l'IA et relancez l'analyse.";
-    }
+    hero.querySelector(".gh-sub").textContent =
+      gemini?.error
+        ? `Gemini indisponible : ${gemini.error}`
+        : "Activez Gemini AI et relancez l'analyse.";
     return;
   }
 
   // Masquer le hero placeholder
-  if (hero) hero.style.display = "none";
+  hero.style.display = "none";
 
   const exec = gemini.resume_executif||{};
   const sav  = gemini.budget_et_economies||{};
@@ -1045,8 +1007,8 @@ function renderGemini(gemini) {
 
   // ── Résumé exécutif (tableau de bord aussi) ──────────────────────────────
   if (exec && !exec.parse_error) {
-    const execCard = safeEl("execCard");
-    if (execCard) execCard.style.display = "";
+    const execCard = document.getElementById("execCard");
+    execCard.style.display = "";
     const statut = exec.statut_global||"ACCEPTABLE";
     const statEl = document.getElementById("execStatut");
     statEl.textContent = statut;
@@ -1068,7 +1030,7 @@ function renderGemini(gemini) {
 
   // ── Score & maturité ────────────────────────────────────────────────────
   if (sav && !sav.parse_error) {
-    setDisplay("geminiScoreCard", "");
+    document.getElementById("geminiScoreCard").style.display = "";
     const scoreC = STAT_C[sav.niveau_maturite]||"#8fa3c0";
     document.getElementById("geminiScoreContent").innerHTML = `
       <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -1085,7 +1047,7 @@ function renderGemini(gemini) {
 
   // ── Analyse juridique VT ────────────────────────────────────────────────
   if (vt_g && !vt_g.parse_error && !vt_g.error) {
-    setDisplay("geminiVtCard", "");
+    document.getElementById("geminiVtCard").style.display = "";
     const fields = [
       {k:"risque_juridique",l:"Risque juridique"},
       {k:"sanctions_possibles",l:"Sanctions possibles"},
@@ -1107,7 +1069,7 @@ function renderGemini(gemini) {
 
   // ── Leviers optimisation ────────────────────────────────────────────────
   if (sav?.leviers?.length) {
-    setDisplay("geminiLevCard", "");
+    document.getElementById("geminiLevCard").style.display = "";
     document.getElementById("geminiLevContent").innerHTML = sav.leviers.map(l=>`
       <div class="levier-item">
         <span class="levier-prio prio-${l.priorite||'FAIBLE'}">${l.priorite||"—"}</span>
@@ -1121,7 +1083,7 @@ function renderGemini(gemini) {
 
   // ── Diagnostic groupe électrogène ───────────────────────────────────────
   if (gen_g && !gen_g.error && !gen_g.parse_error && gen_g.diagnostic) {
-    setDisplay("geminiGenCard2", "");
+    document.getElementById("geminiGenCard2").style.display = "";
     const niv = gen_g.niveau_consommation||"NORMAL";
     document.getElementById("geminiGenContent2").innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -1168,241 +1130,12 @@ function renderReportPreview(result, gemini) {
     </div>
     ${sav.economie_fmt?`
     <div class="rp-section">
-      <div class="rp-heading">🤖 IA</div>
+      <div class="rp-heading">🤖 Gemini AI</div>
       <div class="rp-row"><span class="rp-key">Économie estimée</span><span class="rp-value" style="color:#10b981">${sav.economie_fmt}</span></div>
       <div class="rp-row"><span class="rp-key">Score gestion</span><span class="rp-value">${sav.score_gestion||"—"}/100</span></div>
       <div class="rp-row"><span class="rp-key">Maturité</span><span class="rp-value">${sav.niveau_maturite||"—"}</span></div>
     </div>`:""}`;
-  setDisplay("reportPreview", "");
-}
-
-// ─── CHATBOT IA ──────────────────────────────────────────────────────────────
-
-const CHAT = {
-  history: [],    // { role, text, time }
-  typing: false,
-};
-
-const SUGGESTIONS = [
-  { icon:"⛽", text:"Quels sont les véhicules les plus consommateurs de carburant ?" },
-  { icon:"🔧", text:"Quels véhicules nécessitent une attention urgente en entretien ?" },
-  { icon:"📋", text:"Quel est le risque juridique lié aux VT non conformes ?" },
-  { icon:"💰", text:"Comment réduire le budget carburant de 15% ?" },
-  { icon:"⚡", text:"Analyse les dépenses du groupe électrogène par agence." },
-  { icon:"🔄", text:"Quels véhicules devraient être remplacés en priorité ?" },
-  { icon:"📊", text:"Donne-moi un résumé global de la santé du parc." },
-  { icon:"🚨", text:"Quelles sont les alertes les plus critiques à traiter ?" },
-];
-
-function chatTimestamp() {
-  const now = new Date();
-  return now.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
-}
-
-function initChatbot() {
-  const win = safeEl("iaChatWindow");
-  if (!win) return;
-
-  // Message de bienvenue
-  win.innerHTML = `
-    <div class="chat-welcome">
-      <div class="chat-welcome-icon">🤖</div>
-      <div class="chat-welcome-title">Assistant FleetInsight IA</div>
-      <div>Bonjour ! Je suis votre assistant expert en gestion de flotte.<br/>
-      Lancez une <strong>analyse</strong> puis posez-moi vos questions.</div>
-    </div>`;
-
-  // Suggestions
-  renderSuggestions();
-
-  // Textarea auto-resize
-  const ta = safeEl("iaChatQuestion");
-  if (ta) {
-    ta.addEventListener("input", () => {
-      ta.style.height = "38px";
-      ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
-    });
-    ta.addEventListener("keydown", e => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        askIaQuestion();
-      }
-    });
-  }
-
-  // Bouton effacer
-  const clearBtn = safeEl("btnClearChat");
-  if (clearBtn) clearBtn.addEventListener("click", clearChat);
-}
-
-function renderSuggestions() {
-  const grid = safeEl("suggestionsGrid");
-  if (!grid) return;
-  grid.innerHTML = SUGGESTIONS.map((s, i) => `
-    <button class="suggestion-chip" data-idx="${i}" onclick="useSuggestion(${i})">
-      ${s.icon} ${s.text}
-    </button>`).join("");
-}
-
-function useSuggestion(idx) {
-  const s = SUGGESTIONS[idx];
-  if (!s) return;
-  const ta = safeEl("iaChatQuestion");
-  if (ta) {
-    ta.value = s.text;
-    ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
-    ta.focus();
-  }
-  // Masquer la suggestion utilisée
-  const chip = document.querySelector(`.suggestion-chip[data-idx="${idx}"]`);
-  if (chip) chip.classList.add("hidden");
-  askIaQuestion();
-}
-
-function clearChat() {
-  const win = safeEl("iaChatWindow");
-  if (!win) return;
-  CHAT.history = [];
-  win.innerHTML = `
-    <div class="chat-welcome">
-      <div class="chat-welcome-icon">🤖</div>
-      <div class="chat-welcome-title">Conversation réinitialisée</div>
-      <div>Posez-moi une nouvelle question sur votre parc automobile.</div>
-    </div>`;
-  renderSuggestions();
-  toast("Chat effacé", "Nouvelle conversation démarrée.", "info", 2000);
-}
-
-function appendChatMessage(role, text, isTyping = false) {
-  const win = safeEl("iaChatWindow");
-  if (!win) return null;
-
-  // Supprimer l'indicateur de frappe s'il existe
-  const existingTyping = win.querySelector(".typing-msg");
-  if (existingTyping) existingTyping.remove();
-
-  if (isTyping) {
-    const el = document.createElement("div");
-    el.className = "chat-msg ai typing-msg";
-    el.innerHTML = `
-      <div class="chat-msg-avatar">🤖</div>
-      <div class="chat-msg-content">
-        <div class="typing-indicator">
-          <div class="typing-dot"></div>
-          <div class="typing-dot"></div>
-          <div class="typing-dot"></div>
-        </div>
-      </div>`;
-    win.appendChild(el);
-    win.scrollTop = win.scrollHeight;
-    return el;
-  }
-
-  const time = chatTimestamp();
-  const isUser = role === "user";
-  const avatar = isUser ? "👤" : "🤖";
-  const formattedText = formatChatText(text);
-
-  const el = document.createElement("div");
-  el.className = `chat-msg ${isUser ? "user" : "ai"}`;
-  el.innerHTML = `
-    <div class="chat-msg-avatar">${avatar}</div>
-    <div class="chat-msg-content">
-      <div class="chat-bubble">${formattedText}</div>
-      <div class="chat-msg-time">${time}</div>
-    </div>`;
-
-  win.appendChild(el);
-  win.scrollTop = win.scrollHeight;
-
-  CHAT.history.push({ role, text, time });
-  return el;
-}
-
-function formatChatText(text) {
-  if (!text) return "";
-  // Convertir markdown-like en HTML lisible
-  let html = text
-    // Gras **...**
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    // Italique *...*
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    // Titres ### ou ##
-    .replace(/^#{1,3}\s+(.+)$/gm, '<div class="chat-section">$1</div>')
-    // Listes - item ou • item
-    .replace(/^[-•]\s+(.+)$/gm, '<div class="chat-bullet">$1</div>')
-    // Listes numérotées 1. item
-    .replace(/^\d+\.\s+(.+)$/gm, '<div class="chat-bullet">$1</div>')
-    // Sauts de ligne
-    .replace(/\n{2,}/g, "<br/><br/>")
-    .replace(/\n/g, "<br/>");
-  return html;
-}
-
-async function askIaQuestion() {
-  if (CHAT.typing) return;
-
-  const qEl = safeEl("iaChatQuestion");
-  const question = qEl?.value?.trim() || "";
-
-  if (!question) {
-    toast("Question vide", "Rédigez votre question avant d'envoyer.", "warning");
-    return;
-  }
-  if (!S.result) {
-    appendChatMessage("ai",
-      "⚠️ **Aucune analyse disponible.** Veuillez d'abord charger votre classeur et lancer une analyse depuis l'onglet **Accueil**."
-    );
-    return;
-  }
-
-  // Afficher message utilisateur
-  appendChatMessage("user", question);
-  qEl.value = "";
-  qEl.style.height = "38px";
-
-  // Désactiver le bouton + indicateur de frappe
-  CHAT.typing = true;
-  const sendBtn = safeEl("btnAskIA");
-  if (sendBtn) sendBtn.disabled = true;
-
-  // Indicateur de frappe IA
-  appendChatMessage("ai", null, true);
-
-  // Masquer les suggestions après la première question
-  const sugg = safeEl("chatSuggestions");
-  if (sugg && CHAT.history.length > 2) sugg.style.display = "none";
-
-  try {
-    const res = await callAPI("/ask", {
-      question,
-      analysis: S.result,
-      gemini: S.gemini,
-    });
-
-    if (res.answer) {
-      appendChatMessage("ai", res.answer);
-    } else if (res.error) {
-      appendChatMessage("ai", `❌ **Erreur :** ${res.error}`);
-      toast("IA", res.error, "error");
-    } else {
-      appendChatMessage("ai", "L'IA n'a pas renvoyé de réponse. Réessayez.");
-    }
-  } catch(err) {
-    // Supprimer le typing indicator en cas d'erreur aussi
-    const win = safeEl("iaChatWindow");
-    const typingEl = win?.querySelector(".typing-msg");
-    if (typingEl) typingEl.remove();
-
-    appendChatMessage("ai", `❌ **Erreur de connexion :** ${err.message}`);
-    toast("Erreur IA", err.message, "error");
-  } finally {
-    CHAT.typing = false;
-    if (sendBtn) sendBtn.disabled = false;
-    const ta = safeEl("iaChatQuestion");
-    if (ta) ta.focus();
-  }
+  document.getElementById("reportPreview").style.display = "";
 }
 
 // ─── RAPPORT ─────────────────────────────────────────────────────────────────
@@ -1441,10 +1174,10 @@ async function checkHealth() {
     const res = await fetch(`${CFG.API}/health`, {signal:AbortSignal.timeout(8000)});
     if (res.ok) {
       const data = await res.json();
-      setStatus(data.gemini ? "Connecté + IA" : "Connecté (sans IA)");
+      setStatus(data.gemini ? "Connecté + Gemini" : "Connecté (sans Gemini)");
       if (!data.gemini) {
         document.getElementById("useGemini").checked = false;
-        toast("IA non configurée","Ajoutez GEMINI_API_KEY sur Render","warning",6000);
+        toast("Gemini non configuré","Ajoutez GEMINI_API_KEY sur Render","warning",6000);
       }
     } else { setStatus("Erreur API","off"); }
   } catch { setStatus("Hors ligne","off"); }
@@ -1453,17 +1186,434 @@ async function checkHealth() {
 function bindEvents() {
   document.getElementById("btnLoad").addEventListener("click", loadWorkbook);
   document.getElementById("btnAnalyze").addEventListener("click", runAnalysis);
-  document.getElementById("btnAskIA").addEventListener("click", askIaQuestion);
   document.getElementById("btnPdf").addEventListener("click",  ()=>downloadReport("pdf"));
   document.getElementById("btnWord").addEventListener("click", ()=>downloadReport("word"));
+  // Véhicule — sera initialisé après définition de la fonction
+  setTimeout(() => { if (typeof bindVehiculeEvents === "function") bindVehiculeEvents(); }, 0);
 }
 
 Office.onReady(info => {
   if (info.host === Office.HostType.Excel) {
     initNav();
     bindEvents();
-    initChatbot();
     checkHealth();
     toast("FleetInsight AI","Chargez votre classeur .xlsm pour commencer.","info",3000);
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// ONGLET VÉHICULE — Recherche par immatriculation
+// ═══════════════════════════════════════════════════════════════
+
+// Liste des immatriculations (remplie après chargement)
+let immatList = [];
+
+// ─── Navigation sections ─────────────────────────────────────────────────────
+
+function initVehiculeNav() {
+  document.querySelectorAll(".vsn-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".vsn-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".veh-section").forEach(s => s.classList.remove("active"));
+      btn.classList.add("active");
+      const sec = safeEl("vsec-" + btn.dataset.vsection);
+      if (sec) sec.classList.add("active");
+    });
+  });
+}
+
+// ─── Autocomplete immatriculations ────────────────────────────────────────────
+
+function buildImmatList() {
+  if (!S.sheets) return;
+  // Extraire depuis la feuille LISTE DE VEH
+  const sheetName = Object.keys(S.sheets).find(n =>
+    ["LISTE DE VEH","LISTE VEH","VEHICULES","PARC"].includes(n.toUpperCase().trim())
+  );
+  if (!sheetName) return;
+  const rows = S.sheets[sheetName];
+  if (!rows || !rows.length) return;
+
+  // Détecter la colonne IMMATRICULATION (index 5 dans la structure connue)
+  const header = rows[0];
+  const immatIdx = Object.entries(header).find(([k, v]) =>
+    v && String(v).toUpperCase().includes("IMMAT")
+  )?.[0];
+
+  immatList = [];
+  rows.slice(1).forEach(row => {
+    const val = row[immatIdx || "5"];
+    if (val && String(val).trim() && !String(val).includes("IMMAT")) {
+      immatList.push(String(val).trim().toUpperCase());
+    }
+  });
+
+  // Activer la recherche
+  const btn = safeEl("btnSearchVeh");
+  const hint = safeEl("vehHint");
+  if (btn) btn.disabled = false;
+  if (hint) hint.textContent = `${immatList.length} véhicule(s) disponibles — tapez pour rechercher.`;
+}
+
+function setupImmatAutocomplete() {
+  const input = safeEl("immatInput");
+  const sugg  = safeEl("immatSuggestions");
+  if (!input || !sugg) return;
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toUpperCase();
+    if (!q || !immatList.length) { sugg.style.display = "none"; return; }
+
+    const matches = immatList.filter(im =>
+      im.includes(q) || q.split("").every(c => im.includes(c))
+    ).slice(0, 8);
+
+    if (!matches.length) { sugg.style.display = "none"; return; }
+
+    sugg.innerHTML = matches.map(im =>
+      `<div class="suggestion-item" data-immat="${im}">${im}</div>`
+    ).join("");
+    sugg.style.display = "";
+
+    sugg.querySelectorAll(".suggestion-item").forEach(el => {
+      el.addEventListener("click", () => {
+        input.value = el.dataset.immat;
+        sugg.style.display = "none";
+        input.focus();
+      });
+    });
+  });
+
+  // Fermer les suggestions si clic dehors
+  document.addEventListener("click", e => {
+    if (!input.contains(e.target) && !sugg.contains(e.target)) {
+      sugg.style.display = "none";
+    }
+  });
+
+  // Recherche sur Entrée
+  input.addEventListener("keyup", e => {
+    if (e.key === "Enter") {
+      sugg.style.display = "none";
+      searchVehicle();
+    }
+  });
+}
+
+// ─── Recherche principale ─────────────────────────────────────────────────────
+
+async function searchVehicle() {
+  const input = safeEl("immatInput");
+  const immat = input ? input.value.trim() : "";
+  if (!immat) { toast("Saisissez une immatriculation", "", "warning"); return; }
+  if (!S.sheets) { toast("Chargez le classeur d'abord", "", "warning"); return; }
+
+  showLoader("Recherche en cours…", `Analyse de ${immat.toUpperCase()}`);
+
+  try {
+    const res = await fetch(`${CFG.API}/vehicle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sheets: S.sheets, immat }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    if (!data.found) {
+      renderNotFound(data);
+    } else {
+      renderVehicleProfile(data);
+    }
+
+    setDisplay("vehProfile",  data.found ? "" : "none");
+    setDisplay("vehNotFound", data.found ? "none" : "");
+
+  } catch (err) {
+    toast("Erreur de recherche", err.message, "error");
+  } finally {
+    hideLoader();
+  }
+}
+
+// ─── Rendu profil véhicule ────────────────────────────────────────────────────
+
+function renderVehicleProfile(data) {
+  const { immat, fiche, carburant, entretien, vt, sorties, score } = data;
+
+  // ── En-tête ──────────────────────────────────────────────────────────────
+  const SCORE_COLORS = {
+    OPTIMAL:"#10b981", BON:"#3b82f6", SURVEILLER:"#f59e0b",
+    CRITIQUE:"#f97316", REMPLACER:"#ef4444"
+  };
+  const sc = score || {};
+  const scoreColor = SCORE_COLORS[sc.statut] || "#8fa3c0";
+
+  const hdr = safeEl("vehHeader");
+  if (hdr) hdr.innerHTML = `
+    <div class="vph-left">
+      <div class="vph-icon">🚗</div>
+      <div>
+        <div class="vph-immat">${immat}</div>
+        <div class="vph-info">
+          ${fiche ? `<b>${fiche.marque}</b> ${fiche.type}` : "Véhicule"}
+        </div>
+        ${fiche?.numero && fiche.numero !== "—" ?
+          `<div style="font-size:9px;color:var(--text-3)">N° ${fiche.numero}</div>` : ""}
+      </div>
+    </div>
+    <div class="vph-right">
+      <span class="vph-badge" style="background:${scoreColor}22;color:${scoreColor};border:1px solid ${scoreColor}44">
+        ${sc.statut || "—"}
+      </span>
+      <div class="vph-stats">
+        <div class="vph-stat">
+          <span class="vph-stat-val" style="color:#f59e0b">${carburant?.total_fmt || "—"}</span>
+          <span class="vph-stat-lbl">Carburant</span>
+        </div>
+        <div class="vph-stat">
+          <span class="vph-stat-val" style="color:#8b5cf6">${entretien?.total_fmt || "—"}</span>
+          <span class="vph-stat-lbl">Entretien</span>
+        </div>
+        <div class="vph-stat">
+          <span class="vph-stat-val">${sorties?.nb_missions || 0}</span>
+          <span class="vph-stat-lbl">Missions</span>
+        </div>
+        ${entretien?.en_atelier ?
+          `<div class="vph-stat" style="border-color:#ef4444">
+            <span class="vph-stat-val" style="color:#ef4444">🔴 Oui</span>
+            <span class="vph-stat-lbl">En atelier</span>
+          </div>` : ""}
+      </div>
+    </div>`;
+
+  // ── Score santé ────────────────────────────────────────────────────────────
+  const scoreEl = safeEl("vehScoreContent");
+  if (scoreEl && sc) {
+    const r = 32, cx = 40, cy = 40;
+    const circ = 2 * Math.PI * r;
+    const offset = circ - (sc.score / 100) * circ;
+    scoreEl.innerHTML = `
+      <div class="score-gauge-wrap">
+        <div class="score-circle">
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <circle class="score-circle-bg" cx="${cx}" cy="${cy}" r="${r}"/>
+            <circle class="score-circle-fill"
+              cx="${cx}" cy="${cy}" r="${r}"
+              stroke="${scoreColor}"
+              stroke-dasharray="${circ}"
+              stroke-dashoffset="${offset}"/>
+          </svg>
+          <div class="score-circle-text" style="color:${scoreColor}">${sc.score}</div>
+        </div>
+        <div class="score-details">
+          <div class="score-statut" style="color:${scoreColor}">${sc.statut || "—"}</div>
+          ${(sc.details || []).length ?
+            sc.details.map(d => `<div class="score-issue">• ${d}</div>`).join("") :
+            `<div class="score-issue" style="color:#10b981">✓ Aucune pénalité détectée</div>`}
+        </div>
+      </div>`;
+  }
+
+  // ── VT ────────────────────────────────────────────────────────────────────
+  const vtEl = safeEl("vehVtContent");
+  if (vtEl) {
+    if (!vt) {
+      vtEl.innerHTML = `<p style="color:var(--text-3);font-size:12px">Pas de donnée VT pour ce véhicule.</p>`;
+    } else {
+      const ALERTE_CFG = {
+        OK:          { icon:"✅", color:"#10b981", label:"Conforme" },
+        URGENTE:     { icon:"⚠️", color:"#f97316", label:"Expire bientôt" },
+        VIGILANCE:   { icon:"👁️", color:"#f59e0b", label:"À surveiller" },
+        EXPIRÉE:     { icon:"⛔", color:"#ef4444", label:"VT Expirée" },
+        NON_CONFORME:{ icon:"❌", color:"#ef4444", label:"Non effectuée" },
+        EN_ATTENTE:  { icon:"⏳", color:"#f59e0b", label:"Pas encore" },
+      };
+      const cfg = ALERTE_CFG[vt.alerte] || ALERTE_CFG.EN_ATTENTE;
+      const jr  = vt.jours_restants;
+      vtEl.innerHTML = `
+        <div class="vt-profile-block">
+          <div class="vt-status-icon">${cfg.icon}</div>
+          <div class="vt-status-info">
+            <div class="vt-status-label" style="color:${cfg.color}">${cfg.label}</div>
+            <div class="vt-status-detail">
+              <b>Statut :</b> ${vt.statut}<br/>
+              <b>Affectation :</b> ${vt.affectation}<br/>
+              <b>Date d'expiration :</b> ${vt.expiration}
+            </div>
+          </div>
+          ${jr != null ? `
+          <div class="vt-jours-badge"
+               style="background:${cfg.color}22;border:1px solid ${cfg.color}44;color:${cfg.color}">
+            ${jr < 0 ? `Expirée<br/>il y a ${Math.abs(jr)}j` :
+              jr === 0 ? "Expire<br/>aujourd'hui" :
+              `${jr} jour(s)<br/>restants`}
+          </div>` : ""}
+        </div>`;
+    }
+  }
+
+  // ── Carburant ─────────────────────────────────────────────────────────────
+  const carbEl = safeEl("vehCarbContent");
+  if (carbEl) {
+    const tx = carburant?.transactions || [];
+    carbEl.innerHTML = `
+      <div class="veh-stat-row">
+        <div class="veh-stat-chip">
+          <span class="val" style="color:#f59e0b">${carburant?.total_fmt || "—"}</span>
+          <span class="lbl">Total dépenses</span>
+        </div>
+        <div class="veh-stat-chip">
+          <span class="val">${carburant?.nb_transactions || 0}</span>
+          <span class="lbl">Transactions</span>
+        </div>
+      </div>
+      ${tx.length ? `
+      <div class="hist-table-wrap">
+        <table class="hist-table">
+          <thead><tr>
+            <th>Date</th><th>Produit</th><th>Carte</th><th>Montant</th>
+          </tr></thead>
+          <tbody>
+            ${tx.map(t => `
+              <tr>
+                <td>${t.date}</td>
+                <td>${t.produit}</td>
+                <td style="font-size:10px;color:var(--text-3)">${t.carte}</td>
+                <td class="montant-val">${t.montant_fmt}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` :
+      `<p style="color:var(--text-3);font-size:12px">Aucune transaction carburant trouvée.</p>`}`;
+  }
+
+  // ── Entretien ─────────────────────────────────────────────────────────────
+  const entrEl = safeEl("vehEntrContent");
+  if (entrEl) {
+    const iv = entretien?.interventions || [];
+    entrEl.innerHTML = `
+      <div class="veh-stat-row">
+        <div class="veh-stat-chip">
+          <span class="val" style="color:#8b5cf6">${entretien?.total_fmt || "—"}</span>
+          <span class="lbl">Total coûts</span>
+        </div>
+        <div class="veh-stat-chip">
+          <span class="val">${entretien?.nb_interventions || 0}</span>
+          <span class="lbl">Interventions</span>
+        </div>
+        ${entretien?.en_atelier ? `
+        <div class="veh-stat-chip" style="border-color:#ef4444">
+          <span class="val" style="color:#ef4444">${entretien.duree_atelier != null ? entretien.duree_atelier+"j" : "En cours"}</span>
+          <span class="lbl">En atelier</span>
+        </div>` : ""}
+      </div>
+      ${iv.length ? `
+      <div class="hist-table-wrap">
+        <table class="hist-table">
+          <thead><tr>
+            <th>Dépôt</th><th>Retour</th><th>Type</th><th>Coût</th>
+          </tr></thead>
+          <tbody>
+            ${iv.map(i => `
+              <tr>
+                <td>${i.date_depot}</td>
+                <td>${i.en_cours ? '<span class="badge-encours">En cours</span>' : i.date_retour}</td>
+                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${i.type}">${i.type}</td>
+                <td class="montant-val">${i.montant_fmt}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` :
+      `<p style="color:var(--text-3);font-size:12px">Aucune intervention trouvée.</p>`}`;
+  }
+
+  // ── Sorties / Missions ────────────────────────────────────────────────────
+  const sortEl = safeEl("vehSortContent");
+  if (sortEl) {
+    const ms = sorties?.missions || [];
+    const fmtKm = n => n >= 1000 ? `${(n/1000).toFixed(1)}K km` : `${n} km`;
+    sortEl.innerHTML = `
+      <div class="veh-stat-row">
+        <div class="veh-stat-chip">
+          <span class="val">${ms.length}</span>
+          <span class="lbl">Sorties</span>
+        </div>
+        <div class="veh-stat-chip">
+          <span class="val">${sorties?.km_total ? fmtKm(sorties.km_total) : "—"}</span>
+          <span class="lbl">KM parcourus</span>
+        </div>
+        ${sorties?.km_dernier ? `
+        <div class="veh-stat-chip">
+          <span class="val">${sorties.km_dernier.toLocaleString("fr-FR")}</span>
+          <span class="lbl">Dernier KM</span>
+        </div>` : ""}
+      </div>
+      ${ms.length ? `
+      <div class="hist-table-wrap">
+        <table class="hist-table">
+          <thead><tr>
+            <th>Date</th><th>KM parcouru</th><th>Destination</th><th>Conducteur</th>
+          </tr></thead>
+          <tbody>
+            ${ms.map(m => `
+              <tr>
+                <td>${m.date}</td>
+                <td style="font-family:var(--font-display);color:var(--cyan)">${m.km_parcouru > 0 ? m.km_parcouru+" km" : "—"}</td>
+                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${m.destination}">${m.destination}</td>
+                <td style="font-size:10px;color:var(--text-3)">${m.conducteur}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` :
+      `<p style="color:var(--text-3);font-size:12px">Aucune sortie trouvée.</p>`}`;
+  }
+
+  // Activer la première section VT par défaut
+  document.querySelectorAll(".vsn-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".veh-section").forEach(s => s.classList.remove("active"));
+  const vtBtn = document.querySelector('[data-vsection="vt"]');
+  const vtSec = safeEl("vsec-vt");
+  if (vtBtn) vtBtn.classList.add("active");
+  if (vtSec) vtSec.classList.add("active");
+}
+
+// ─── Rendu véhicule non trouvé ────────────────────────────────────────────────
+
+function renderNotFound(data) {
+  const el = safeEl("vehNotFoundContent");
+  if (!el) return;
+  const sugg = data.suggestions || [];
+  el.innerHTML = `
+    <div class="not-found-block">
+      <div class="not-found-icon">🔍</div>
+      <div class="not-found-title">Véhicule introuvable</div>
+      <div class="not-found-msg">
+        Aucune donnée trouvée pour <b>${data.immat_recherchee}</b>
+        dans les feuilles du classeur.<br/>
+        Vérifiez l'immatriculation ou essayez l'une des suggestions ci-dessous.
+      </div>
+      ${sugg.length ? `
+      <div class="suggest-list">
+        ${sugg.map(s => `
+          <div class="suggest-chip" onclick="
+            const inp = document.getElementById('immatInput');
+            if (inp) { inp.value='${s}'; searchVehicle(); }
+          ">${s}</div>
+        `).join("")}
+      </div>` : ""}
+    </div>`;
+}
+
+// ─── Bind vehicle events ──────────────────────────────────────────────────────
+
+function bindVehiculeEvents() {
+  const btn = safeEl("btnSearchVeh");
+  if (btn) btn.addEventListener("click", () => searchVehicle());
+  initVehiculeNav();
+  setupImmatAutocomplete();
+}
