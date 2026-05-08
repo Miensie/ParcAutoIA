@@ -10,7 +10,7 @@
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CFG = {
-  API: "https://fleetinsight-ai.onrender.com",  // ← URL Render
+  API: "https://parcautoia.onrender.com",  // ← URL Render
   TIMEOUT: 90_000,
 };
 
