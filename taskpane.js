@@ -1415,34 +1415,28 @@ function renderVehicleProfile(data) {
 
   // ── Score santé ──────────────────────────────────────────────────────────
   const scoreEl = safeEl("vehScoreContent");
-  if (scoreEl) {
-    const s = sc.score ?? 0;
-    const ringColor = scoreColor;
-    const dash = Math.round((s / 100) * 251);
+  if (scoreEl && sc) {
+    const r = 32, cx = 40, cy = 40;
+    const circ = 2 * Math.PI * r;
+    const offset = circ - (sc.score / 100) * circ;
     scoreEl.innerHTML = `
-      <div class="score-wrap">
-        <svg class="score-ring" viewBox="0 0 80 80">
-          <circle cx="50" cy="50" r="40" fill="none" stroke="var(--surface-2)" stroke-width="10"/>
-          <circle cx="50" cy="50" r="40" fill="none"
-                  stroke="${ringColor}" stroke-width="10"
-                  stroke-dasharray="${dash} 251"
-                  stroke-dashoffset="0"
-                  transform="rotate(-90 50 50)"
-                  style="transition:stroke-dasharray .6s ease"/>
-          <text x="50" y="55" text-anchor="middle"
-                font-size="22" font-weight="bold" fill="${ringColor}">${s}</text>
-        </svg>
-        <div class="score-detail">
-          <div class="score-statut" style="color:${ringColor}">${sc.statut || "—"}</div>
-          ${sc.nb_pannes
-            ? `<div class="score-note">• ${sc.nb_pannes} panne(s) curative(s) (−${Math.min(10, Math.floor(sc.nb_pannes / 3) * 3)} pts)</div>`
-            : ""}
-          ${sc.en_atelier
-            ? `<div class="score-note" style="color:#ef4444">• Véhicule en atelier</div>`
-            : ""}
-          ${sc.detail_vt && sc.detail_vt !== "OK" && sc.detail_vt !== "INCONNU"
-            ? `<div class="score-note">• VT : ${sc.detail_vt}</div>`
-            : ""}
+      <div class="score-gauge-wrap">
+        <div class="score-circle">
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <circle class="score-circle-bg" cx="${cx}" cy="${cy}" r="${r}"/>
+            <circle class="score-circle-fill"
+              cx="${cx}" cy="${cy}" r="${r}"
+              stroke="${scoreColor}"
+              stroke-dasharray="${circ}"
+              stroke-dashoffset="${offset}"/>
+          </svg>
+          <div class="score-circle-text" style="color:${scoreColor}">${sc.score}</div>
+        </div>
+        <div class="score-details">
+          <div class="score-statut" style="color:${scoreColor}">${sc.statut || "—"}</div>
+          ${(sc.details || []).length ?
+            sc.details.map(d => `<div class="score-issue">• ${d}</div>`).join("") :
+            `<div class="score-issue" style="color:#10b981">✓ Aucune pénalité détectée</div>`}
         </div>
       </div>`;
   }
