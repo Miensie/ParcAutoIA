@@ -1422,7 +1422,7 @@ function renderVehicleProfile(data) {
     scoreEl.innerHTML = `
       <div class="score-gauge-wrap">
         <div class="score-circle">
-          <svg width="80" height="80" viewBox="0 0 80 80">
+          <svg width="80" height="80" viewBox="0 0 40 40">
             <circle class="score-circle-bg" cx="${cx}" cy="${cy}" r="${r}"/>
             <circle class="score-circle-fill"
               cx="${cx}" cy="${cy}" r="${r}"
