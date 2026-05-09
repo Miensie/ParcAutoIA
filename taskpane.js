@@ -1421,7 +1421,7 @@ function renderVehicleProfile(data) {
     const dash = Math.round((s / 100) * 251);
     scoreEl.innerHTML = `
       <div class="score-wrap">
-        <svg class="score-ring" viewBox="0 0 100 100">
+        <svg class="score-ring" viewBox="0 0 80 80">
           <circle cx="50" cy="50" r="40" fill="none" stroke="var(--surface-2)" stroke-width="10"/>
           <circle cx="50" cy="50" r="40" fill="none"
                   stroke="${ringColor}" stroke-width="10"
