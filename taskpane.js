@@ -1347,79 +1347,102 @@ async function searchVehicle() {
 
 // ─── Rendu profil véhicule ────────────────────────────────────────────────────
 
+/**
+ * FleetInsight IA — renderVehicleProfile (CORRIGÉ)
+ * =================================================
+ * Corrections :
+ *   - Missions : nb chip utilise sorties.nb_missions (pas ms.length)
+ *   - km_parcouru : affiche "0 km" quand la mission a d'autres données
+ *   - Carburant : nb_transactions reflète le vrai count filtré du backend
+ */
+
 function renderVehicleProfile(data) {
   const { immat, fiche, carburant, entretien, vt, sorties, score } = data;
 
   // ── En-tête ──────────────────────────────────────────────────────────────
   const SCORE_COLORS = {
-    OPTIMAL:"#10b981", BON:"#3b82f6", SURVEILLER:"#f59e0b",
-    CRITIQUE:"#f97316", REMPLACER:"#ef4444"
+    OPTIMAL:    "#10b981",
+    BON:        "#3b82f6",
+    SURVEILLER: "#f59e0b",
+    CRITIQUE:   "#f97316",
+    REMPLACER:  "#ef4444",
   };
   const sc = score || {};
   const scoreColor = SCORE_COLORS[sc.statut] || "#8fa3c0";
 
   const hdr = safeEl("vehHeader");
-  if (hdr) hdr.innerHTML = `
-    <div class="vph-left">
-      <div class="vph-icon">🚗</div>
-      <div>
-        <div class="vph-immat">${immat}</div>
-        <div class="vph-info">
-          ${fiche ? `<b>${fiche.marque}</b> ${fiche.type}` : "Véhicule"}
+  if (hdr) {
+    hdr.innerHTML = `
+      <div class="vph-left">
+        <div class="vph-icon">🚗</div>
+        <div>
+          <div class="vph-immat">${immat}</div>
+          <div class="vph-info">
+            ${fiche ? `<b>${fiche.marque}</b> ${fiche.type}` : "Véhicule"}
+          </div>
+          ${fiche?.numero && fiche.numero !== "—"
+            ? `<div style="font-size:9px;color:var(--text-3)">N° ${fiche.numero}</div>`
+            : ""}
         </div>
-        ${fiche?.numero && fiche.numero !== "—" ?
-          `<div style="font-size:9px;color:var(--text-3)">N° ${fiche.numero}</div>` : ""}
       </div>
-    </div>
-    <div class="vph-right">
-      <span class="vph-badge" style="background:${scoreColor}22;color:${scoreColor};border:1px solid ${scoreColor}44">
-        ${sc.statut || "—"}
-      </span>
-      <div class="vph-stats">
-        <div class="vph-stat">
-          <span class="vph-stat-val" style="color:#f59e0b">${carburant?.total_fmt || "—"}</span>
-          <span class="vph-stat-lbl">Carburant</span>
+      <div class="vph-right">
+        <span class="vph-badge"
+              style="background:${scoreColor}22;color:${scoreColor};border:1px solid ${scoreColor}44">
+          ${sc.statut || "—"}
+        </span>
+        <div class="vph-stats">
+          <div class="vph-stat">
+            <span class="vph-stat-val" style="color:#f59e0b">${carburant?.total_fmt || "—"}</span>
+            <span class="vph-stat-lbl">Carburant</span>
+          </div>
+          <div class="vph-stat">
+            <span class="vph-stat-val" style="color:#8b5cf6">${entretien?.total_fmt || "—"}</span>
+            <span class="vph-stat-lbl">Entretien</span>
+          </div>
+          <div class="vph-stat">
+            <span class="vph-stat-val">${sorties?.nb_missions || 0}</span>
+            <span class="vph-stat-lbl">Missions</span>
+          </div>
+          ${entretien?.en_atelier
+            ? `<div class="vph-stat" style="color:#ef4444">
+                 <span class="vph-stat-val">⚠</span>
+                 <span class="vph-stat-lbl">Atelier</span>
+               </div>`
+            : ""}
         </div>
-        <div class="vph-stat">
-          <span class="vph-stat-val" style="color:#8b5cf6">${entretien?.total_fmt || "—"}</span>
-          <span class="vph-stat-lbl">Entretien</span>
-        </div>
-        <div class="vph-stat">
-          <span class="vph-stat-val">${sorties?.nb_missions || 0}</span>
-          <span class="vph-stat-lbl">Missions</span>
-        </div>
-        ${entretien?.en_atelier ?
-          `<div class="vph-stat" style="border-color:#ef4444">
-            <span class="vph-stat-val" style="color:#ef4444">🔴 Oui</span>
-            <span class="vph-stat-lbl">En atelier</span>
-          </div>` : ""}
-      </div>
-    </div>`;
+      </div>`;
+  }
 
-  // ── Score santé ────────────────────────────────────────────────────────────
+  // ── Score santé ──────────────────────────────────────────────────────────
   const scoreEl = safeEl("vehScoreContent");
-  if (scoreEl && sc) {
-    const r = 32, cx = 40, cy = 40;
-    const circ = 2 * Math.PI * r;
-    const offset = circ - (sc.score / 100) * circ;
+  if (scoreEl) {
+    const s = sc.score ?? 0;
+    const ringColor = scoreColor;
+    const dash = Math.round((s / 100) * 251);
     scoreEl.innerHTML = `
-      <div class="score-gauge-wrap">
-        <div class="score-circle">
-          <svg width="80" height="80" viewBox="0 0 80 80">
-            <circle class="score-circle-bg" cx="${cx}" cy="${cy}" r="${r}"/>
-            <circle class="score-circle-fill"
-              cx="${cx}" cy="${cy}" r="${r}"
-              stroke="${scoreColor}"
-              stroke-dasharray="${circ}"
-              stroke-dashoffset="${offset}"/>
-          </svg>
-          <div class="score-circle-text" style="color:${scoreColor}">${sc.score}</div>
-        </div>
-        <div class="score-details">
-          <div class="score-statut" style="color:${scoreColor}">${sc.statut || "—"}</div>
-          ${(sc.details || []).length ?
-            sc.details.map(d => `<div class="score-issue">• ${d}</div>`).join("") :
-            `<div class="score-issue" style="color:#10b981">✓ Aucune pénalité détectée</div>`}
+      <div class="score-wrap">
+        <svg class="score-ring" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="40" fill="none" stroke="var(--surface-2)" stroke-width="10"/>
+          <circle cx="50" cy="50" r="40" fill="none"
+                  stroke="${ringColor}" stroke-width="10"
+                  stroke-dasharray="${dash} 251"
+                  stroke-dashoffset="0"
+                  transform="rotate(-90 50 50)"
+                  style="transition:stroke-dasharray .6s ease"/>
+          <text x="50" y="55" text-anchor="middle"
+                font-size="22" font-weight="bold" fill="${ringColor}">${s}</text>
+        </svg>
+        <div class="score-detail">
+          <div class="score-statut" style="color:${ringColor}">${sc.statut || "—"}</div>
+          ${sc.nb_pannes
+            ? `<div class="score-note">• ${sc.nb_pannes} panne(s) curative(s) (−${Math.min(10, Math.floor(sc.nb_pannes / 3) * 3)} pts)</div>`
+            : ""}
+          ${sc.en_atelier
+            ? `<div class="score-note" style="color:#ef4444">• Véhicule en atelier</div>`
+            : ""}
+          ${sc.detail_vt && sc.detail_vt !== "OK" && sc.detail_vt !== "INCONNU"
+            ? `<div class="score-note">• VT : ${sc.detail_vt}</div>`
+            : ""}
         </div>
       </div>`;
   }
@@ -1428,35 +1451,46 @@ function renderVehicleProfile(data) {
   const vtEl = safeEl("vehVtContent");
   if (vtEl) {
     if (!vt) {
-      vtEl.innerHTML = `<p style="color:var(--text-3);font-size:12px">Pas de donnée VT pour ce véhicule.</p>`;
+      vtEl.innerHTML = `<p style="color:var(--text-3);font-size:12px">Aucune donnée VT trouvée.</p>`;
     } else {
       const ALERTE_CFG = {
-        OK:          { icon:"✅", color:"#10b981", label:"Conforme" },
-        URGENTE:     { icon:"⚠️", color:"#f97316", label:"Expire bientôt" },
-        VIGILANCE:   { icon:"👁️", color:"#f59e0b", label:"À surveiller" },
-        EXPIRÉE:     { icon:"⛔", color:"#ef4444", label:"VT Expirée" },
-        NON_CONFORME:{ icon:"❌", color:"#ef4444", label:"Non effectuée" },
-        EN_ATTENTE:  { icon:"⏳", color:"#f59e0b", label:"Pas encore" },
+        EXPIRÉE:      { label: "EXPIRÉE",       color: "#ef4444" },
+        NON_CONFORME: { label: "NON CONFORME",  color: "#ef4444" },
+        URGENTE:      { label: "URGENT",        color: "#f97316" },
+        VIGILANCE:    { label: "VIGILANCE",     color: "#f59e0b" },
+        EN_ATTENTE:   { label: "EN ATTENTE",    color: "#8fa3c0" },
+        OK:           { label: "CONFORME",      color: "#10b981" },
       };
       const cfg = ALERTE_CFG[vt.alerte] || ALERTE_CFG.EN_ATTENTE;
       const jr  = vt.jours_restants;
       vtEl.innerHTML = `
-        <div class="vt-profile-block">
-          <div class="vt-status-icon">${cfg.icon}</div>
-          <div class="vt-status-info">
-            <div class="vt-status-label" style="color:${cfg.color}">${cfg.label}</div>
-            <div class="vt-status-detail">
-              <b>Statut :</b> ${vt.statut}<br/>
-              <b>Affectation :</b> ${vt.affectation}<br/>
-              <b>Date d'expiration :</b> ${vt.expiration}
-            </div>
+        <div class="vt-detail">
+          <div class="vt-row">
+            <span class="vt-lbl">Statut</span>
+            <span class="vt-val">${vt.statut}</span>
           </div>
-          ${jr != null ? `
+          <div class="vt-row">
+            <span class="vt-lbl">Expiration</span>
+            <span class="vt-val">${vt.expiration}</span>
+          </div>
+          <div class="vt-row">
+            <span class="vt-lbl">Affectation</span>
+            <span class="vt-val">${vt.affectation}</span>
+          </div>
+          <div class="vt-row">
+            <span class="vt-lbl">Alerte</span>
+            <span class="vt-badge" style="background:${cfg.color}22;color:${cfg.color}">
+              ${cfg.label}
+            </span>
+          </div>
+          ${jr !== null && jr !== undefined ? `
           <div class="vt-jours-badge"
                style="background:${cfg.color}22;border:1px solid ${cfg.color}44;color:${cfg.color}">
-            ${jr < 0 ? `Expirée<br/>il y a ${Math.abs(jr)}j` :
-              jr === 0 ? "Expire<br/>aujourd'hui" :
-              `${jr} jour(s)<br/>restants`}
+            ${jr < 0
+              ? `Expirée il y a ${Math.abs(jr)} jour(s)`
+              : jr === 0
+                ? "Expire aujourd'hui"
+                : `${jr} jour(s) restants`}
           </div>` : ""}
         </div>`;
     }
@@ -1473,7 +1507,7 @@ function renderVehicleProfile(data) {
           <span class="lbl">Total dépenses</span>
         </div>
         <div class="veh-stat-chip">
-          <span class="val">${carburant?.nb_transactions || 0}</span>
+          <span class="val">${carburant?.nb_transactions ?? 0}</span>
           <span class="lbl">Transactions</span>
         </div>
       </div>
@@ -1508,12 +1542,14 @@ function renderVehicleProfile(data) {
           <span class="lbl">Total coûts</span>
         </div>
         <div class="veh-stat-chip">
-          <span class="val">${entretien?.nb_interventions || 0}</span>
+          <span class="val">${entretien?.nb_interventions ?? 0}</span>
           <span class="lbl">Interventions</span>
         </div>
         ${entretien?.en_atelier ? `
         <div class="veh-stat-chip" style="border-color:#ef4444">
-          <span class="val" style="color:#ef4444">${entretien.duree_atelier != null ? entretien.duree_atelier+"j" : "En cours"}</span>
+          <span class="val" style="color:#ef4444">
+            ${entretien.duree_atelier != null ? entretien.duree_atelier + "j" : "En cours"}
+          </span>
           <span class="lbl">En atelier</span>
         </div>` : ""}
       </div>
@@ -1527,8 +1563,11 @@ function renderVehicleProfile(data) {
             ${iv.map(i => `
               <tr>
                 <td>${i.date_depot}</td>
-                <td>${i.en_cours ? '<span class="badge-encours">En cours</span>' : i.date_retour}</td>
-                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${i.type}">${i.type}</td>
+                <td>${i.en_cours
+                  ? '<span class="badge-encours">En cours</span>'
+                  : i.date_retour}</td>
+                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis"
+                    title="${i.type}">${i.type}</td>
                 <td class="montant-val">${i.montant_fmt}</td>
               </tr>`).join("")}
           </tbody>
@@ -1541,11 +1580,20 @@ function renderVehicleProfile(data) {
   const sortEl = safeEl("vehSortContent");
   if (sortEl) {
     const ms = sorties?.missions || [];
-    const fmtKm = n => n >= 1000 ? `${(n/1000).toFixed(1)}K km` : `${n} km`;
+
+    // ── BUG FIX : on utilise sorties.nb_missions (total réel du backend)
+    // et non ms.length (limité à 30 par le backend)
+    const nbTotal = sorties?.nb_missions ?? ms.length;
+
+    const fmtKm = n => {
+      if (n == null || n === 0) return "—";
+      return n >= 1000 ? `${(n / 1000).toFixed(1)}K km` : `${n} km`;
+    };
+
     sortEl.innerHTML = `
       <div class="veh-stat-row">
         <div class="veh-stat-chip">
-          <span class="val">${ms.length}</span>
+          <span class="val">${nbTotal}</span>
           <span class="lbl">Sorties</span>
         </div>
         <div class="veh-stat-chip">
@@ -1554,7 +1602,9 @@ function renderVehicleProfile(data) {
         </div>
         ${sorties?.km_dernier ? `
         <div class="veh-stat-chip">
-          <span class="val">${sorties.km_dernier.toLocaleString("fr-FR")}</span>
+          <span class="val">
+            ${Number(sorties.km_dernier).toLocaleString("fr-FR")}
+          </span>
           <span class="lbl">Dernier KM</span>
         </div>` : ""}
       </div>
@@ -1568,50 +1618,26 @@ function renderVehicleProfile(data) {
             ${ms.map(m => `
               <tr>
                 <td>${m.date}</td>
-                <td style="font-family:var(--font-display);color:var(--cyan)">${m.km_parcouru > 0 ? m.km_parcouru+" km" : "—"}</td>
-                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${m.destination}">${m.destination}</td>
+                <td style="font-family:var(--font-display);color:var(--cyan)">
+                  ${m.km_parcouru > 0
+                    ? fmtKm(m.km_parcouru)
+                    : (m.date !== "—" || m.destination !== "—"
+                        ? "<span style='opacity:.5'>—</span>"
+                        : "—")}
+                </td>
+                <td>${m.destination}</td>
                 <td style="font-size:10px;color:var(--text-3)">${m.conducteur}</td>
               </tr>`).join("")}
           </tbody>
         </table>
+        ${nbTotal > 30
+          ? `<p style="font-size:10px;color:var(--text-3);text-align:center;padding:8px 0">
+               Affichage des 30 dernières sur ${nbTotal} sorties
+             </p>`
+          : ""}
       </div>` :
-      `<p style="color:var(--text-3);font-size:12px">Aucune sortie trouvée.</p>`}`;
+      `<p style="color:var(--text-3);font-size:12px">Aucune mission trouvée.</p>`}`;
   }
-
-  // Activer la première section VT par défaut
-  document.querySelectorAll(".vsn-btn").forEach(b => b.classList.remove("active"));
-  document.querySelectorAll(".veh-section").forEach(s => s.classList.remove("active"));
-  const vtBtn = document.querySelector('[data-vsection="vt"]');
-  const vtSec = safeEl("vsec-vt");
-  if (vtBtn) vtBtn.classList.add("active");
-  if (vtSec) vtSec.classList.add("active");
-}
-
-// ─── Rendu véhicule non trouvé ────────────────────────────────────────────────
-
-function renderNotFound(data) {
-  const el = safeEl("vehNotFoundContent");
-  if (!el) return;
-  const sugg = data.suggestions || [];
-  el.innerHTML = `
-    <div class="not-found-block">
-      <div class="not-found-icon">🔍</div>
-      <div class="not-found-title">Véhicule introuvable</div>
-      <div class="not-found-msg">
-        Aucune donnée trouvée pour <b>${data.immat_recherchee}</b>
-        dans les feuilles du classeur.<br/>
-        Vérifiez l'immatriculation ou essayez l'une des suggestions ci-dessous.
-      </div>
-      ${sugg.length ? `
-      <div class="suggest-list">
-        ${sugg.map(s => `
-          <div class="suggest-chip" onclick="
-            const inp = document.getElementById('immatInput');
-            if (inp) { inp.value='${s}'; searchVehicle(); }
-          ">${s}</div>
-        `).join("")}
-      </div>` : ""}
-    </div>`;
 }
 
 // ─── Bind vehicle events ──────────────────────────────────────────────────────
