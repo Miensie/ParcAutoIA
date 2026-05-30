@@ -72,7 +72,7 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.80" DefaultValue="https://miensie.github.io/ParcAutoIA/icon-80.png" />
+        <bt:Image id="Icon.80" DefaultValue="https://miensie.github.io/ParcAutoIA/icon.png" />
       </bt:Images>
       <bt:Urls>
         <bt:Url id="LearnMore.Url"  DefaultValue="https://github.com/Miensie/ParcAutoIA" />
