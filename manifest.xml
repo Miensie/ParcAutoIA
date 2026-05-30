@@ -14,8 +14,8 @@
   <DisplayName DefaultValue="ParcAuto AI" />
   <Description DefaultValue="Analyse intelligente de parc automobile — 3 niveaux : opérationnel, indicateurs, décisions." />
 
-  <IconUrl DefaultValue="https://miensie.github.io/ParcAutoIA/icon-80.png" />
-  <HighResolutionIconUrl DefaultValue="https://miensie.github.io/ParcAutoIA/icon-80.png" />
+  <IconUrl DefaultValue="https://miensie.github.io/ParcAutoIA/icon.png" />
+  <HighResolutionIconUrl DefaultValue="https://miensie.github.io/ParcAutoIA/icon.png" />
   <SupportUrl DefaultValue="https://github.com/Miensie/ParcAutoIA" />
 
   <AppDomains>
